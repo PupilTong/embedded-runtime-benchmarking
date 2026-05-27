@@ -35,6 +35,13 @@ RUNTIMES = [
     "wasmtime-pulley",
     "wasmtime-jit",
 ]
+INTERPRETER_RUNTIMES = [
+    "quickjs",
+    "primjs",
+    "wamr-fast-interp",
+    "wamr-fast-interp-threads",
+    "wasmtime-pulley",
+]
 
 WAMR_STABLE_RUST_FEATURES = [
     "bulk-memory",
@@ -410,8 +417,21 @@ def generate_readme(report: dict) -> str:
     for case in cases:
         values = {runtime: summary.get(runtime, {}).get(case) for runtime in RUNTIMES}
         present = {runtime: value for runtime, value in values.items() if value is not None}
+        interpreter_present = {
+            runtime: values[runtime]
+            for runtime in INTERPRETER_RUNTIMES
+            if values.get(runtime) is not None
+        }
         fastest = min(present, key=present.get) if present else "-"
-        result_rows.append([case, *(format_ms(values[runtime]) for runtime in RUNTIMES), fastest])
+        fastest_interpreter = min(interpreter_present, key=interpreter_present.get) if interpreter_present else "-"
+        result_rows.append(
+            [
+                case,
+                *(format_ms(values[runtime]) for runtime in RUNTIMES),
+                fastest,
+                fastest_interpreter,
+            ]
+        )
 
     tool_by_runtime = {item["name"]: item for item in report["tools"]}
     size_by_runtime = report.get("sizes", {})
@@ -493,7 +513,7 @@ This repository benchmarks the V8 v7-style workload shape used by [ahaoboy/js-en
 
 Median elapsed time in milliseconds. Lower is better.
 
-{markdown_table(["Case", *RUNTIMES, "Fastest"], result_rows)}
+{markdown_table(["Case", *RUNTIMES, "Fastest", "Fastest Interpreter"], result_rows)}
 
 ## V8 V7 Style Score
 
