@@ -27,6 +27,24 @@ WASM_THREADS_OPT = ARTIFACTS_DIR / "embedded-runtime-benchmarking.wasip1-threads
 WAMR_DARWIN_DIR = ROOT / "tools" / "wasm-micro-runtime" / "product-mini" / "platforms" / "darwin"
 WAMR_FULL_IWASM = WAMR_DARWIN_DIR / "build" / "iwasm"
 WAMR_THREADS_IWASM = WAMR_DARWIN_DIR / "build-threads-mem" / "iwasm"
+RUNTIMES = [
+    "quickjs",
+    "primjs",
+    "wamr-fast-interp",
+    "wamr-fast-interp-threads",
+    "wasmtime-pulley",
+    "wasmtime-jit",
+    "wasmtime-pulley-threads",
+    "wasmtime-jit-threads",
+]
+INTERPRETER_RUNTIMES = [
+    "quickjs",
+    "primjs",
+    "wamr-fast-interp",
+    "wamr-fast-interp-threads",
+    "wasmtime-pulley",
+    "wasmtime-pulley-threads",
+]
 
 WAMR_STABLE_RUST_FEATURES = [
     "bulk-memory",
@@ -398,20 +416,31 @@ def generate_readme(report: dict) -> str:
         "Splay",
         "NavierStokes",
     ]
-    runtimes = ["quickjs", "primjs", "wamr-fast-interp", "wamr-fast-interp-threads"]
-
     result_rows: list[list[str]] = []
     for case in cases:
-        values = {runtime: summary.get(runtime, {}).get(case) for runtime in runtimes}
+        values = {runtime: summary.get(runtime, {}).get(case) for runtime in RUNTIMES}
         present = {runtime: value for runtime, value in values.items() if value is not None}
+        interpreter_present = {
+            runtime: values[runtime]
+            for runtime in INTERPRETER_RUNTIMES
+            if values.get(runtime) is not None
+        }
         fastest = min(present, key=present.get) if present else "-"
-        result_rows.append([case, *(format_ms(values[runtime]) for runtime in runtimes), fastest])
+        fastest_interpreter = min(interpreter_present, key=interpreter_present.get) if interpreter_present else "-"
+        result_rows.append(
+            [
+                case,
+                *(format_ms(values[runtime]) for runtime in RUNTIMES),
+                fastest,
+                fastest_interpreter,
+            ]
+        )
 
     tool_by_runtime = {item["name"]: item for item in report["tools"]}
     size_by_runtime = report.get("sizes", {})
 
     score_rows: list[dict] = []
-    for runtime in runtimes:
+    for runtime in RUNTIMES:
         case_scores = [
             v8_v7_case_score(V8_V7_REFERENCE_SCORES[case], summary.get(runtime, {}).get(case))
             for case in cases
@@ -487,7 +516,7 @@ This repository benchmarks the V8 v7-style workload shape used by [ahaoboy/js-en
 
 Median elapsed time in milliseconds. Lower is better.
 
-{markdown_table(["Case", "quickjs", "primjs", "wamr-fast-interp", "wamr-fast-interp-threads", "Fastest"], result_rows)}
+{markdown_table(["Case", *RUNTIMES, "Fastest", "Fastest Interpreter"], result_rows)}
 
 ## V8 V7 Style Score
 
@@ -508,13 +537,13 @@ python3 scripts/bench.py --samples 5 --scale 1
 Runtime binaries can be overridden with environment variables:
 
 ```sh
-QUICKJS_BIN=/path/to/qjs PRIMJS_BIN=/path/to/primjs IWASM_BIN=/path/to/iwasm IWASM_THREADS_BIN=/path/to/iwasm WASM_OPT_BIN=/path/to/wasm-opt python3 scripts/bench.py
+QUICKJS_BIN=/path/to/qjs PRIMJS_BIN=/path/to/primjs IWASM_BIN=/path/to/iwasm IWASM_THREADS_BIN=/path/to/iwasm WASMTIME_BIN=/path/to/wasmtime WASM_OPT_BIN=/path/to/wasm-opt python3 scripts/bench.py
 ```
 
 On macOS, Homebrew can provide the external optimizer/runtime tools:
 
 ```sh
-brew install binaryen wasm-micro-runtime python@3.11
+brew install binaryen wasm-micro-runtime python@3.11 wasmtime
 ```
 
 QuickJS and PrimJS are expected to be source-built for this comparison, then passed through `QUICKJS_BIN` and `PRIMJS_BIN`. The current default source builds follow ahaoboy's engine package scripts:
@@ -568,6 +597,24 @@ The scalar WAMR runtime is built from WAMR 2.4.4 with these stable WAMR runtime 
 
 The threaded WAMR comparison uses a second WAMR 2.4.4 fast-interpreter binary with the maximum stable runtime feature set that passed `wasm32-wasip1-threads` validation on this machine: `{", ".join(report["wasm"]["threads_runtime_features"])}`. Enabling `WAMR_BUILD_GC=1`/typed function references together with wasi-threads made the WAMR fast-interpreter run hang or exit 139 on this host, so the threaded runtime keeps GC off to preserve functional correctness. The Rust threaded artifact still uses `wasm32-wasip1-threads`; atomics/shared-memory ABI comes from the Rust target, and the benchmark selects the copied threaded cases with `--cfg wasip1_threads`.
 
+The Wasmtime comparisons use the same optimized scalar `wasm32-wasip1` artifact as WAMR:
+
+```sh
+wasmtime run -C cache=n --target pulley64 artifacts/embedded-runtime-benchmarking.wasip1.opt.wasm
+wasmtime run -C cache=n -C compiler=cranelift artifacts/embedded-runtime-benchmarking.wasip1.opt.wasm
+```
+
+`wasmtime-pulley` selects Wasmtime's portable interpreter by using the Pulley target. `wasmtime-jit` selects Cranelift explicitly. Both disable Wasmtime's persistent compilation cache with `-C cache=n` so results are not affected by a previous command-line cache entry.
+
+The Wasmtime threaded comparisons use the optimized `wasm32-wasip1-threads` artifact:
+
+```sh
+wasmtime run -C cache=n --target pulley64 -S threads=y -W threads=y -W shared-memory=y artifacts/embedded-runtime-benchmarking.wasip1-threads.opt.wasm --threads --workers {report["options"]["workers"]}
+wasmtime run -C cache=n -C compiler=cranelift -S threads=y -W threads=y -W shared-memory=y artifacts/embedded-runtime-benchmarking.wasip1-threads.opt.wasm --threads --workers {report["options"]["workers"]}
+```
+
+Wasmtime 45.0.0 on this host reports `wasm_threads` as unsupported for the Pulley compiler configuration, so `wasmtime-pulley-threads` is included in the status table but has no timing samples. `wasmtime-jit-threads` runs successfully with WASI threads enabled.
+
 ## Case Rewrite Policy
 
 - The Rust code uses edition 2024 and the pinned `{report["host"]["rustc"].split()[1]}` toolchain in `rust-toolchain.toml`.
@@ -586,6 +633,8 @@ The threaded WAMR comparison uses a second WAMR 2.4.4 fast-interpreter binary wi
 - [WAMR running modes](https://bytecodealliance.github.io/wamr.dev/blog/introduction-to-wamr-running-modes/)
 - [WAMR README](https://github.com/bytecodealliance/wasm-micro-runtime)
 - [WAMR WebAssembly proposal stability](https://github.com/bytecodealliance/wasm-micro-runtime/blob/main/doc/stability_wasm_proposals.md)
+- [Wasmtime Pulley documentation](https://docs.wasmtime.dev/examples-pulley.html)
+- [Wasmtime CLI options](https://docs.wasmtime.dev/cli-options.html)
 - [Rust wasm32-wasip1-threads target](https://doc.rust-lang.org/rustc/platform-support/wasm32-wasip1-threads.html)
 """
 
@@ -625,6 +674,7 @@ def main() -> int:
         iwasm_threads_candidates.append(iwasm)
     iwasm_threads_candidates.append("iwasm")
     iwasm_threads = find_tool("IWASM_THREADS_BIN", iwasm_threads_candidates)
+    wasmtime = find_tool("WASMTIME_BIN", [str(ROOT / "tools" / "wasmtime" / "bin" / "wasmtime"), "wasmtime"])
     wasm_opt = find_tool("WASM_OPT_BIN", ["wasm-opt"])
     cargo = find_tool("CARGO_BIN", ["cargo"])
 
@@ -762,6 +812,165 @@ def main() -> int:
                 "missing; set IWASM_THREADS_BIN or install a wasi-threads-enabled iwasm",
             )
         )
+
+    if wasmtime and wasm_ready:
+        version = command_text([wasmtime, "--version"])
+        wasmtime_pulley_samples, error = run_json_benchmark(
+            "wasmtime-pulley",
+            [
+                wasmtime,
+                "run",
+                "-C",
+                "cache=n",
+                "--target",
+                "pulley64",
+                str(WASM_OPT),
+                "--samples",
+                str(samples),
+                "--scale",
+                str(scale),
+            ],
+            args.timeout,
+        )
+        all_samples.extend(wasmtime_pulley_samples)
+        tools.append(
+            runtime_status(
+                "wasmtime-pulley",
+                wasmtime,
+                version,
+                "ok" if not error else f"failed: {compact_error(error)}",
+            )
+        )
+
+        wasmtime_jit_samples, error = run_json_benchmark(
+            "wasmtime-jit",
+            [
+                wasmtime,
+                "run",
+                "-C",
+                "cache=n",
+                "-C",
+                "compiler=cranelift",
+                str(WASM_OPT),
+                "--samples",
+                str(samples),
+                "--scale",
+                str(scale),
+            ],
+            args.timeout,
+        )
+        all_samples.extend(wasmtime_jit_samples)
+        tools.append(
+            runtime_status(
+                "wasmtime-jit",
+                wasmtime,
+                version,
+                "ok" if not error else f"failed: {compact_error(error)}",
+            )
+        )
+    elif wasmtime:
+        version = command_text([wasmtime, "--version"])
+        tools.append(runtime_status("wasmtime-pulley", wasmtime, version, "skipped; optimized wasm artifact unavailable"))
+        tools.append(runtime_status("wasmtime-jit", wasmtime, version, "skipped; optimized wasm artifact unavailable"))
+    else:
+        tools.append(runtime_status("wasmtime-pulley", None, None, "missing; set WASMTIME_BIN or install wasmtime"))
+        tools.append(runtime_status("wasmtime-jit", None, None, "missing; set WASMTIME_BIN or install wasmtime"))
+        notes.append("Wasmtime was not benchmarked because `wasmtime` was not found in PATH.")
+
+    if wasmtime and wasm_threads_ready:
+        version = command_text([wasmtime, "--version"])
+        wasmtime_pulley_threads_samples, error = run_json_benchmark(
+            "wasmtime-pulley-threads",
+            [
+                wasmtime,
+                "run",
+                "-C",
+                "cache=n",
+                "--target",
+                "pulley64",
+                "-S",
+                "threads=y",
+                "-W",
+                "threads=y",
+                "-W",
+                "shared-memory=y",
+                str(WASM_THREADS_OPT),
+                "--threads",
+                "--workers",
+                str(workers),
+                "--samples",
+                str(samples),
+                "--scale",
+                str(scale),
+            ],
+            args.timeout,
+        )
+        all_samples.extend(wasmtime_pulley_threads_samples)
+        tools.append(
+            runtime_status(
+                "wasmtime-pulley-threads",
+                wasmtime,
+                version,
+                "ok" if not error else f"failed: {compact_error(error)}",
+            )
+        )
+
+        wasmtime_jit_threads_samples, error = run_json_benchmark(
+            "wasmtime-jit-threads",
+            [
+                wasmtime,
+                "run",
+                "-C",
+                "cache=n",
+                "-C",
+                "compiler=cranelift",
+                "-S",
+                "threads=y",
+                "-W",
+                "threads=y",
+                "-W",
+                "shared-memory=y",
+                str(WASM_THREADS_OPT),
+                "--threads",
+                "--workers",
+                str(workers),
+                "--samples",
+                str(samples),
+                "--scale",
+                str(scale),
+            ],
+            args.timeout,
+        )
+        all_samples.extend(wasmtime_jit_threads_samples)
+        tools.append(
+            runtime_status(
+                "wasmtime-jit-threads",
+                wasmtime,
+                version,
+                "ok" if not error else f"failed: {compact_error(error)}",
+            )
+        )
+    elif wasmtime:
+        version = command_text([wasmtime, "--version"])
+        tools.append(
+            runtime_status(
+                "wasmtime-pulley-threads",
+                wasmtime,
+                version,
+                "skipped; optimized wasm32-wasip1-threads artifact unavailable",
+            )
+        )
+        tools.append(
+            runtime_status(
+                "wasmtime-jit-threads",
+                wasmtime,
+                version,
+                "skipped; optimized wasm32-wasip1-threads artifact unavailable",
+            )
+        )
+    else:
+        tools.append(runtime_status("wasmtime-pulley-threads", None, None, "missing; set WASMTIME_BIN or install wasmtime"))
+        tools.append(runtime_status("wasmtime-jit-threads", None, None, "missing; set WASMTIME_BIN or install wasmtime"))
 
     sizes = {item["name"]: binary_size(item["binary"]) for item in tools}
 
