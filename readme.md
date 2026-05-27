@@ -4,7 +4,7 @@ This repository benchmarks the V8 v7-style workload shape used by [ahaoboy/js-en
 
 ## Current Machine
 
-- Generated at: `2026-05-27T07:19:09+00:00`
+- Generated at: `2026-05-27T07:55:53+00:00`
 - Host: `Darwin arm64`
 - Rust: `rustc 1.95.0 (59807616e 2026-04-14)`
 - Cargo: `cargo 1.95.0 (f2d3ce0bd 2026-03-21)`
@@ -29,14 +29,35 @@ Median elapsed time in milliseconds. Lower is better.
 
 | Case | quickjs | primjs | wamr-fast-interp | wamr-fast-interp-threads | Fastest |
 | --- | --- | --- | --- | --- | --- |
-| Richards | 24.000 | 34.000 | 4.972 | 1.500 | wamr-fast-interp-threads |
-| DeltaBlue | 16.000 | 16.000 | 12.036 | 2.742 | wamr-fast-interp-threads |
-| Crypto | 536.000 | 837.000 | 18.113 | 5.313 | wamr-fast-interp-threads |
-| RayTrace | 35.000 | 41.000 | 17.010 | 3.867 | wamr-fast-interp-threads |
-| EarleyBoyer | 15.000 | 24.000 | 8.328 | 18.098 | wamr-fast-interp |
-| RegExp | 84.000 | 112.000 | 75.499 | 19.136 | wamr-fast-interp-threads |
-| Splay | 701.000 | 1403.000 | 6.260 | 3.190 | wamr-fast-interp-threads |
-| NavierStokes | 38.000 | 44.000 | 14.978 | 3.294 | wamr-fast-interp-threads |
+| Richards | 23.000 | 36.000 | 4.891 | 1.484 | wamr-fast-interp-threads |
+| DeltaBlue | 16.000 | 16.000 | 11.837 | 2.778 | wamr-fast-interp-threads |
+| Crypto | 525.000 | 832.000 | 17.872 | 5.226 | wamr-fast-interp-threads |
+| RayTrace | 34.000 | 42.000 | 17.062 | 3.764 | wamr-fast-interp-threads |
+| EarleyBoyer | 15.000 | 24.000 | 8.186 | 17.598 | wamr-fast-interp |
+| RegExp | 83.000 | 112.000 | 73.378 | 18.969 | wamr-fast-interp-threads |
+| Splay | 703.000 | 1370.000 | 6.334 | 3.212 | wamr-fast-interp-threads |
+| NavierStokes | 38.000 | 43.000 | 14.961 | 3.206 | wamr-fast-interp-threads |
+
+## V8 V7 Style Score
+
+Higher is better. This table follows the score shape from `ahaoboy/js-engine-benchmark`'s V8 v7 harness: each case score is `100 * reference / median_us`, then `Score` is the geometric mean of the case scores. The reference constants are the `BenchmarkSuite(..., reference, ...)` values from the upstream V8 v7 case files. `Score/MB` follows upstream as `Score / Total size in MiB`, where `Total size = Exe size + Dll size` for the runtime binary. This repository uses median full-sample timings rather than the upstream one-second harness average, so the scores are intended for comparing rows in this report, not as official V8/Octane scores.
+
+| Metric | wamr-fast-interp-threads | wamr-fast-interp | quickjs | primjs |
+| --- | --- | --- | --- | --- |
+| Version | iwasm 2.4.4 | iwasm 2.4.4 | QuickJS version 2025-09-13 | PrimJS 2.11.1-rc.1 |
+| Total size | 540.9K | 522K | 950.4K | 2.4M |
+| Exe size | 540.9K | 522K | 950.4K | 2.4M |
+| Dll size | 0 | 0 | 0 | 0 |
+| Richards | 2379 | 722 | 153 | 98.1 |
+| DeltaBlue | 2380 | 559 | 413 | 413 |
+| Crypto | 5093 | 1489 | 50.7 | 32 |
+| RayTrace | 19660 | 4337 | 2176 | 1762 |
+| EarleyBoyer | 3787 | 8141 | 4443 | 2777 |
+| RegExp | 4802 | 1241 | 1098 | 813 |
+| Splay | 2537 | 1287 | 11.6 | 5.95 |
+| NavierStokes | 46288 | 9919 | 3905 | 3451 |
+| Score | 5760 | 2069 | 445 | 319 |
+| Score/MB | 10904 | 4058 | 479 | 134 |
 
 ## Notes
 
@@ -122,6 +143,9 @@ The threaded WAMR comparison uses a second WAMR 2.4.4 fast-interpreter binary wi
 ## References
 
 - [ahaoboy/js-engine-benchmark](https://github.com/ahaoboy/js-engine-benchmark)
+- [ahaoboy V8 v7 case files](https://github.com/ahaoboy/js-engine-benchmark/tree/main/v8-v7)
+- [ahaoboy V8 v7 score harness](https://github.com/ahaoboy/js-engine-benchmark/blob/main/v8-v7/base.js)
+- [ahaoboy V8 v7 runner](https://github.com/ahaoboy/js-engine-benchmark/blob/main/v8-v7/run.js)
 - [V8 benchmark documentation](https://v8.dev/docs/benchmarks)
 - [WAMR running modes](https://bytecodealliance.github.io/wamr.dev/blog/introduction-to-wamr-running-modes/)
 - [WAMR README](https://github.com/bytecodealliance/wasm-micro-runtime)

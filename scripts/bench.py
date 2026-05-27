@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import platform
 import shutil
@@ -81,6 +82,16 @@ WAMR_UNSUPPORTED_STABLE_FEATURES = [
     "js-string-builtins",
     "relaxed-simd",
 ]
+V8_V7_REFERENCE_SCORES = {
+    "Richards": 35302,
+    "DeltaBlue": 66118,
+    "Crypto": 266181,
+    "RayTrace": 739989,
+    "EarleyBoyer": 666463,
+    "RegExp": 910985,
+    "Splay": 81491,
+    "NavierStokes": 1484000,
+}
 
 
 def run_command(
@@ -118,6 +129,54 @@ def command_text(command: list[str], *, timeout: int = 20) -> str:
         return str(exc)
     output = (completed.stdout or completed.stderr).strip()
     return output.splitlines()[0] if output else f"exit {completed.returncode}"
+
+
+def file_size(path: str | None) -> int:
+    if not path:
+        return 0
+    try:
+        return Path(path).stat().st_size
+    except OSError:
+        return 0
+
+
+def dependency_paths(binary: str | None) -> list[str]:
+    if not binary:
+        return []
+    system = platform.system()
+    try:
+        if system == "Darwin":
+            completed = run_command(["otool", "-L", binary], timeout=20)
+            if completed.returncode != 0:
+                return []
+            return [
+                line.strip().split(" ")[0]
+                for line in completed.stdout.splitlines()[1:]
+                if line.strip()
+            ]
+        if system == "Linux":
+            completed = run_command(["ldd", binary], timeout=20)
+            if completed.returncode != 0:
+                return []
+            paths = []
+            for line in completed.stdout.splitlines():
+                path = line.split("=>")[-1].strip().split(" (")[0]
+                if path and not path.startswith(("linux-", "/lib/", "/lib64/")):
+                    paths.append(path)
+            return paths
+    except OSError:
+        return []
+    return []
+
+
+def binary_size(binary: str | None) -> dict[str, int]:
+    exe_size = file_size(binary)
+    dll_size = sum(file_size(path) for path in dependency_paths(binary))
+    return {
+        "exe_size": exe_size,
+        "dll_size": dll_size,
+        "total_size": exe_size + dll_size,
+    }
 
 
 def quickjs_version(binary: str) -> str:
@@ -282,6 +341,51 @@ def format_ms(value: float | None) -> str:
     return "-" if value is None else f"{value:.3f}"
 
 
+def fixed_one(value: float) -> str:
+    fixed = f"{value:.1f}"
+    return fixed[:-2] if fixed.endswith(".0") else fixed
+
+
+def human_size(value: int | float | None) -> str:
+    if not value:
+        return "0"
+    kib = float(value) / 1024.0
+    if kib < 1024.0:
+        return f"{fixed_one(kib)}K"
+    mib = kib / 1024.0
+    if mib < 1024.0:
+        return f"{fixed_one(mib)}M"
+    return f"{fixed_one(mib / 1024.0)}G"
+
+
+def geometric_mean(values: list[float]) -> float | None:
+    if not values or any(value <= 0.0 for value in values):
+        return None
+    return math.exp(sum(math.log(value) for value in values) / len(values))
+
+
+def v8_v7_case_score(reference: float, elapsed_ms: float | None) -> float | None:
+    if elapsed_ms is None or elapsed_ms <= 0.0:
+        return None
+    return 100.0 * reference / (elapsed_ms * 1000.0)
+
+
+def format_v8_v7_score(value: float | None) -> str:
+    if value is None:
+        return "-"
+    return f"{value:.0f}" if value > 100.0 else f"{value:.3g}"
+
+
+def score_per_mb(score: float | None, total_size: int) -> int | None:
+    if score is None or total_size <= 0:
+        return None
+    return math.floor(score / total_size * 1024 * 1024)
+
+
+def format_int(value: int | None) -> str:
+    return "-" if value is None else str(value)
+
+
 def generate_readme(report: dict) -> str:
     summary = summarize(report["samples"])
     cases = [
@@ -302,6 +406,49 @@ def generate_readme(report: dict) -> str:
         present = {runtime: value for runtime, value in values.items() if value is not None}
         fastest = min(present, key=present.get) if present else "-"
         result_rows.append([case, *(format_ms(values[runtime]) for runtime in runtimes), fastest])
+
+    tool_by_runtime = {item["name"]: item for item in report["tools"]}
+    size_by_runtime = report.get("sizes", {})
+
+    score_rows: list[dict] = []
+    for runtime in runtimes:
+        case_scores = [
+            v8_v7_case_score(V8_V7_REFERENCE_SCORES[case], summary.get(runtime, {}).get(case))
+            for case in cases
+        ]
+        valid_scores = [score for score in case_scores if score is not None]
+        total_score = geometric_mean(valid_scores) if len(valid_scores) == len(cases) else None
+        sort_score = total_score if total_score is not None else -1.0
+        sizes = size_by_runtime.get(runtime, {})
+        score_rows.append(
+            {
+                "runtime": runtime,
+                "sort_score": sort_score,
+                "version": tool_by_runtime.get(runtime, {}).get("version", ""),
+                "sizes": sizes,
+                "case_scores": case_scores,
+                "total_score": total_score,
+                "score_per_mb": score_per_mb(total_score, int(sizes.get("total_size", 0))),
+            }
+        )
+    score_rows.sort(key=lambda row: row["sort_score"], reverse=True)
+
+    score_metric_rows = [
+        ["Version", *(row["version"] or "-" for row in score_rows)],
+        ["Total size", *(human_size(row["sizes"].get("total_size", 0)) for row in score_rows)],
+        ["Exe size", *(human_size(row["sizes"].get("exe_size", 0)) for row in score_rows)],
+        ["Dll size", *(human_size(row["sizes"].get("dll_size", 0)) for row in score_rows)],
+    ]
+    for index, case in enumerate(cases):
+        score_metric_rows.append(
+            [case, *(format_v8_v7_score(row["case_scores"][index]) for row in score_rows)]
+        )
+    score_metric_rows.extend(
+        [
+            ["Score", *(format_v8_v7_score(row["total_score"]) for row in score_rows)],
+            ["Score/MB", *(format_int(row["score_per_mb"]) for row in score_rows)],
+        ]
+    )
 
     status_rows = [
         [item["name"], item["binary"] or "-", item["version"] or "-", item["status"]]
@@ -341,6 +488,12 @@ This repository benchmarks the V8 v7-style workload shape used by [ahaoboy/js-en
 Median elapsed time in milliseconds. Lower is better.
 
 {markdown_table(["Case", "quickjs", "primjs", "wamr-fast-interp", "wamr-fast-interp-threads", "Fastest"], result_rows)}
+
+## V8 V7 Style Score
+
+Higher is better. This table follows the score shape from `ahaoboy/js-engine-benchmark`'s V8 v7 harness: each case score is `100 * reference / median_us`, then `Score` is the geometric mean of the case scores. The reference constants are the `BenchmarkSuite(..., reference, ...)` values from the upstream V8 v7 case files. `Score/MB` follows upstream as `Score / Total size in MiB`, where `Total size = Exe size + Dll size` for the runtime binary. This repository uses median full-sample timings rather than the upstream one-second harness average, so the scores are intended for comparing rows in this report, not as official V8/Octane scores.
+
+{markdown_table(["Metric", *(row["runtime"] for row in score_rows)], score_metric_rows)}
 
 ## Notes
 
@@ -426,6 +579,9 @@ The threaded WAMR comparison uses a second WAMR 2.4.4 fast-interpreter binary wi
 ## References
 
 - [ahaoboy/js-engine-benchmark](https://github.com/ahaoboy/js-engine-benchmark)
+- [ahaoboy V8 v7 case files](https://github.com/ahaoboy/js-engine-benchmark/tree/main/v8-v7)
+- [ahaoboy V8 v7 score harness](https://github.com/ahaoboy/js-engine-benchmark/blob/main/v8-v7/base.js)
+- [ahaoboy V8 v7 runner](https://github.com/ahaoboy/js-engine-benchmark/blob/main/v8-v7/run.js)
 - [V8 benchmark documentation](https://v8.dev/docs/benchmarks)
 - [WAMR running modes](https://bytecodealliance.github.io/wamr.dev/blog/introduction-to-wamr-running-modes/)
 - [WAMR README](https://github.com/bytecodealliance/wasm-micro-runtime)
@@ -607,6 +763,8 @@ def main() -> int:
             )
         )
 
+    sizes = {item["name"]: binary_size(item["binary"]) for item in tools}
+
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "host": {
@@ -628,6 +786,14 @@ def main() -> int:
             "threads_runtime_features": WAMR_THREADS_RUNTIME_FEATURES,
             "unsupported_wamr_features": WAMR_UNSUPPORTED_STABLE_FEATURES,
         },
+        "score": {
+            "algorithm": "v8-v7",
+            "case_formula": "100 * reference / median_us",
+            "total_formula": "geometric_mean(case_scores)",
+            "score_per_mb_formula": "floor(score / total_size_bytes * 1024 * 1024)",
+            "references": V8_V7_REFERENCE_SCORES,
+        },
+        "sizes": sizes,
         "tools": tools,
         "samples": all_samples,
         "notes": notes,
