@@ -4,7 +4,7 @@ This repository benchmarks the V8 v7-style workload shape used by [ahaoboy/js-en
 
 ## Current Machine
 
-- Generated at: `2026-05-27T07:55:53+00:00`
+- Generated at: `2026-05-27T13:51:54+00:00`
 - Host: `Darwin arm64`
 - Rust: `rustc 1.95.0 (59807616e 2026-04-14)`
 - Cargo: `cargo 1.95.0 (f2d3ce0bd 2026-03-21)`
@@ -12,7 +12,7 @@ This repository benchmarks the V8 v7-style workload shape used by [ahaoboy/js-en
 - Samples per case: `5`
 - Scale: `1`
 - Thread workers: `4`
-- Valid sample rows: `160`
+- Valid sample rows: `240`
 
 ## Runtime Status
 
@@ -22,42 +22,44 @@ This repository benchmarks the V8 v7-style workload shape used by [ahaoboy/js-en
 | primjs | /Users/bytedance/Documents/embedded-runtime-benchmarking/tools/primjs/out/Default/qjs | PrimJS 2.11.1-rc.1 | ok |
 | wamr-fast-interp | /Users/bytedance/Documents/embedded-runtime-benchmarking/tools/wasm-micro-runtime/product-mini/platforms/darwin/build/iwasm | iwasm 2.4.4 | ok |
 | wamr-fast-interp-threads | /Users/bytedance/Documents/embedded-runtime-benchmarking/tools/wasm-micro-runtime/product-mini/platforms/darwin/build-threads-mem/iwasm | iwasm 2.4.4 | ok |
+| wasmtime-pulley | /opt/homebrew/bin/wasmtime | wasmtime 45.0.0 (377cd917a 2026-05-21) | ok |
+| wasmtime-jit | /opt/homebrew/bin/wasmtime | wasmtime 45.0.0 (377cd917a 2026-05-21) | ok |
 
 ## Results
 
 Median elapsed time in milliseconds. Lower is better.
 
-| Case | quickjs | primjs | wamr-fast-interp | wamr-fast-interp-threads | Fastest |
-| --- | --- | --- | --- | --- | --- |
-| Richards | 23.000 | 36.000 | 4.891 | 1.484 | wamr-fast-interp-threads |
-| DeltaBlue | 16.000 | 16.000 | 11.837 | 2.778 | wamr-fast-interp-threads |
-| Crypto | 525.000 | 832.000 | 17.872 | 5.226 | wamr-fast-interp-threads |
-| RayTrace | 34.000 | 42.000 | 17.062 | 3.764 | wamr-fast-interp-threads |
-| EarleyBoyer | 15.000 | 24.000 | 8.186 | 17.598 | wamr-fast-interp |
-| RegExp | 83.000 | 112.000 | 73.378 | 18.969 | wamr-fast-interp-threads |
-| Splay | 703.000 | 1370.000 | 6.334 | 3.212 | wamr-fast-interp-threads |
-| NavierStokes | 38.000 | 43.000 | 14.961 | 3.206 | wamr-fast-interp-threads |
+| Case | quickjs | primjs | wamr-fast-interp | wamr-fast-interp-threads | wasmtime-pulley | wasmtime-jit | Fastest |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Richards | 24.000 | 33.000 | 5.221 | 1.571 | 5.275 | 0.489 | wasmtime-jit |
+| DeltaBlue | 15.000 | 16.000 | 11.192 | 2.751 | 19.679 | 0.453 | wasmtime-jit |
+| Crypto | 499.000 | 773.000 | 16.995 | 5.081 | 30.413 | 3.420 | wasmtime-jit |
+| RayTrace | 32.000 | 38.000 | 16.164 | 3.705 | 19.896 | 0.516 | wasmtime-jit |
+| EarleyBoyer | 14.000 | 22.000 | 7.772 | 18.138 | 11.734 | 0.600 | wasmtime-jit |
+| RegExp | 79.000 | 104.000 | 70.623 | 18.815 | 76.526 | 3.251 | wasmtime-jit |
+| Splay | 720.000 | 1281.000 | 5.788 | 3.151 | 8.973 | 1.001 | wasmtime-jit |
+| NavierStokes | 35.000 | 41.000 | 13.897 | 3.192 | 29.010 | 0.991 | wasmtime-jit |
 
 ## V8 V7 Style Score
 
 Higher is better. This table follows the score shape from `ahaoboy/js-engine-benchmark`'s V8 v7 harness: each case score is `100 * reference / median_us`, then `Score` is the geometric mean of the case scores. The reference constants are the `BenchmarkSuite(..., reference, ...)` values from the upstream V8 v7 case files. `Score/MB` follows upstream as `Score / Total size in MiB`, where `Total size = Exe size + Dll size` for the runtime binary. This repository uses median full-sample timings rather than the upstream one-second harness average, so the scores are intended for comparing rows in this report, not as official V8/Octane scores.
 
-| Metric | wamr-fast-interp-threads | wamr-fast-interp | quickjs | primjs |
-| --- | --- | --- | --- | --- |
-| Version | iwasm 2.4.4 | iwasm 2.4.4 | QuickJS version 2025-09-13 | PrimJS 2.11.1-rc.1 |
-| Total size | 540.9K | 522K | 950.4K | 2.4M |
-| Exe size | 540.9K | 522K | 950.4K | 2.4M |
-| Dll size | 0 | 0 | 0 | 0 |
-| Richards | 2379 | 722 | 153 | 98.1 |
-| DeltaBlue | 2380 | 559 | 413 | 413 |
-| Crypto | 5093 | 1489 | 50.7 | 32 |
-| RayTrace | 19660 | 4337 | 2176 | 1762 |
-| EarleyBoyer | 3787 | 8141 | 4443 | 2777 |
-| RegExp | 4802 | 1241 | 1098 | 813 |
-| Splay | 2537 | 1287 | 11.6 | 5.95 |
-| NavierStokes | 46288 | 9919 | 3905 | 3451 |
-| Score | 5760 | 2069 | 445 | 319 |
-| Score/MB | 10904 | 4058 | 479 | 134 |
+| Metric | wasmtime-jit | wamr-fast-interp-threads | wamr-fast-interp | wasmtime-pulley | quickjs | primjs |
+| --- | --- | --- | --- | --- | --- | --- |
+| Version | wasmtime 45.0.0 (377cd917a 2026-05-21) | iwasm 2.4.4 | iwasm 2.4.4 | wasmtime 45.0.0 (377cd917a 2026-05-21) | QuickJS version 2025-09-13 | PrimJS 2.11.1-rc.1 |
+| Total size | 46M | 540.9K | 522K | 46M | 950.4K | 2.4M |
+| Exe size | 46M | 540.9K | 522K | 46M | 950.4K | 2.4M |
+| Dll size | 0 | 0 | 0 | 0 | 0 | 0 |
+| Richards | 7221 | 2247 | 676 | 669 | 147 | 107 |
+| DeltaBlue | 14608 | 2403 | 591 | 336 | 441 | 413 |
+| Crypto | 7783 | 5239 | 1566 | 875 | 53.3 | 34.4 |
+| RayTrace | 143536 | 19973 | 4578 | 3719 | 2312 | 1947 |
+| EarleyBoyer | 111162 | 3674 | 8575 | 5680 | 4760 | 3029 |
+| RegExp | 28021 | 4842 | 1290 | 1190 | 1153 | 876 |
+| Splay | 8141 | 2586 | 1408 | 908 | 11.3 | 6.36 |
+| NavierStokes | 149685 | 46491 | 10679 | 5115 | 4240 | 3620 |
+| Score | 28597 | 5758 | 2161 | 1480 | 463 | 341 |
+| Score/MB | 621 | 10902 | 4239 | 32 | 498 | 144 |
 
 ## Notes
 
@@ -72,13 +74,13 @@ python3 scripts/bench.py --samples 5 --scale 1
 Runtime binaries can be overridden with environment variables:
 
 ```sh
-QUICKJS_BIN=/path/to/qjs PRIMJS_BIN=/path/to/primjs IWASM_BIN=/path/to/iwasm IWASM_THREADS_BIN=/path/to/iwasm WASM_OPT_BIN=/path/to/wasm-opt python3 scripts/bench.py
+QUICKJS_BIN=/path/to/qjs PRIMJS_BIN=/path/to/primjs IWASM_BIN=/path/to/iwasm IWASM_THREADS_BIN=/path/to/iwasm WASMTIME_BIN=/path/to/wasmtime WASM_OPT_BIN=/path/to/wasm-opt python3 scripts/bench.py
 ```
 
 On macOS, Homebrew can provide the external optimizer/runtime tools:
 
 ```sh
-brew install binaryen wasm-micro-runtime python@3.11
+brew install binaryen wasm-micro-runtime python@3.11 wasmtime
 ```
 
 QuickJS and PrimJS are expected to be source-built for this comparison, then passed through `QUICKJS_BIN` and `PRIMJS_BIN`. The current default source builds follow ahaoboy's engine package scripts:
@@ -132,6 +134,15 @@ The scalar WAMR runtime is built from WAMR 2.4.4 with these stable WAMR runtime 
 
 The threaded WAMR comparison uses a second WAMR 2.4.4 fast-interpreter binary with the maximum stable runtime feature set that passed `wasm32-wasip1-threads` validation on this machine: `bulk-memory, simd128, memory64, multi-memory, reference-types, tail-call, shared-memory/threads`. Enabling `WAMR_BUILD_GC=1`/typed function references together with wasi-threads made the WAMR fast-interpreter run hang or exit 139 on this host, so the threaded runtime keeps GC off to preserve functional correctness. The Rust threaded artifact still uses `wasm32-wasip1-threads`; atomics/shared-memory ABI comes from the Rust target, and the benchmark selects the copied threaded cases with `--cfg wasip1_threads`.
 
+The Wasmtime comparisons use the same optimized scalar `wasm32-wasip1` artifact as WAMR:
+
+```sh
+wasmtime run -C cache=n --target pulley64 artifacts/embedded-runtime-benchmarking.wasip1.opt.wasm
+wasmtime run -C cache=n -C compiler=cranelift artifacts/embedded-runtime-benchmarking.wasip1.opt.wasm
+```
+
+`wasmtime-pulley` selects Wasmtime's portable interpreter by using the Pulley target. `wasmtime-jit` selects Cranelift explicitly. Both disable Wasmtime's persistent compilation cache with `-C cache=n` so results are not affected by a previous command-line cache entry.
+
 ## Case Rewrite Policy
 
 - The Rust code uses edition 2024 and the pinned `1.95.0` toolchain in `rust-toolchain.toml`.
@@ -150,4 +161,6 @@ The threaded WAMR comparison uses a second WAMR 2.4.4 fast-interpreter binary wi
 - [WAMR running modes](https://bytecodealliance.github.io/wamr.dev/blog/introduction-to-wamr-running-modes/)
 - [WAMR README](https://github.com/bytecodealliance/wasm-micro-runtime)
 - [WAMR WebAssembly proposal stability](https://github.com/bytecodealliance/wasm-micro-runtime/blob/main/doc/stability_wasm_proposals.md)
+- [Wasmtime Pulley documentation](https://docs.wasmtime.dev/examples-pulley.html)
+- [Wasmtime CLI options](https://docs.wasmtime.dev/cli-options.html)
 - [Rust wasm32-wasip1-threads target](https://doc.rust-lang.org/rustc/platform-support/wasm32-wasip1-threads.html)
