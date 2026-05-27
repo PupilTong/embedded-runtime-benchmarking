@@ -34,6 +34,8 @@ RUNTIMES = [
     "wamr-fast-interp-threads",
     "wasmtime-pulley",
     "wasmtime-jit",
+    "wasmtime-pulley-threads",
+    "wasmtime-jit-threads",
 ]
 INTERPRETER_RUNTIMES = [
     "quickjs",
@@ -41,6 +43,7 @@ INTERPRETER_RUNTIMES = [
     "wamr-fast-interp",
     "wamr-fast-interp-threads",
     "wasmtime-pulley",
+    "wasmtime-pulley-threads",
 ]
 
 WAMR_STABLE_RUST_FEATURES = [
@@ -603,6 +606,15 @@ wasmtime run -C cache=n -C compiler=cranelift artifacts/embedded-runtime-benchma
 
 `wasmtime-pulley` selects Wasmtime's portable interpreter by using the Pulley target. `wasmtime-jit` selects Cranelift explicitly. Both disable Wasmtime's persistent compilation cache with `-C cache=n` so results are not affected by a previous command-line cache entry.
 
+The Wasmtime threaded comparisons use the optimized `wasm32-wasip1-threads` artifact:
+
+```sh
+wasmtime run -C cache=n --target pulley64 -S threads=y -W threads=y -W shared-memory=y artifacts/embedded-runtime-benchmarking.wasip1-threads.opt.wasm --threads --workers {report["options"]["workers"]}
+wasmtime run -C cache=n -C compiler=cranelift -S threads=y -W threads=y -W shared-memory=y artifacts/embedded-runtime-benchmarking.wasip1-threads.opt.wasm --threads --workers {report["options"]["workers"]}
+```
+
+Wasmtime 45.0.0 on this host reports `wasm_threads` as unsupported for the Pulley compiler configuration, so `wasmtime-pulley-threads` is included in the status table but has no timing samples. `wasmtime-jit-threads` runs successfully with WASI threads enabled.
+
 ## Case Rewrite Policy
 
 - The Rust code uses edition 2024 and the pinned `{report["host"]["rustc"].split()[1]}` toolchain in `rust-toolchain.toml`.
@@ -864,6 +876,101 @@ def main() -> int:
         tools.append(runtime_status("wasmtime-pulley", None, None, "missing; set WASMTIME_BIN or install wasmtime"))
         tools.append(runtime_status("wasmtime-jit", None, None, "missing; set WASMTIME_BIN or install wasmtime"))
         notes.append("Wasmtime was not benchmarked because `wasmtime` was not found in PATH.")
+
+    if wasmtime and wasm_threads_ready:
+        version = command_text([wasmtime, "--version"])
+        wasmtime_pulley_threads_samples, error = run_json_benchmark(
+            "wasmtime-pulley-threads",
+            [
+                wasmtime,
+                "run",
+                "-C",
+                "cache=n",
+                "--target",
+                "pulley64",
+                "-S",
+                "threads=y",
+                "-W",
+                "threads=y",
+                "-W",
+                "shared-memory=y",
+                str(WASM_THREADS_OPT),
+                "--threads",
+                "--workers",
+                str(workers),
+                "--samples",
+                str(samples),
+                "--scale",
+                str(scale),
+            ],
+            args.timeout,
+        )
+        all_samples.extend(wasmtime_pulley_threads_samples)
+        tools.append(
+            runtime_status(
+                "wasmtime-pulley-threads",
+                wasmtime,
+                version,
+                "ok" if not error else f"failed: {compact_error(error)}",
+            )
+        )
+
+        wasmtime_jit_threads_samples, error = run_json_benchmark(
+            "wasmtime-jit-threads",
+            [
+                wasmtime,
+                "run",
+                "-C",
+                "cache=n",
+                "-C",
+                "compiler=cranelift",
+                "-S",
+                "threads=y",
+                "-W",
+                "threads=y",
+                "-W",
+                "shared-memory=y",
+                str(WASM_THREADS_OPT),
+                "--threads",
+                "--workers",
+                str(workers),
+                "--samples",
+                str(samples),
+                "--scale",
+                str(scale),
+            ],
+            args.timeout,
+        )
+        all_samples.extend(wasmtime_jit_threads_samples)
+        tools.append(
+            runtime_status(
+                "wasmtime-jit-threads",
+                wasmtime,
+                version,
+                "ok" if not error else f"failed: {compact_error(error)}",
+            )
+        )
+    elif wasmtime:
+        version = command_text([wasmtime, "--version"])
+        tools.append(
+            runtime_status(
+                "wasmtime-pulley-threads",
+                wasmtime,
+                version,
+                "skipped; optimized wasm32-wasip1-threads artifact unavailable",
+            )
+        )
+        tools.append(
+            runtime_status(
+                "wasmtime-jit-threads",
+                wasmtime,
+                version,
+                "skipped; optimized wasm32-wasip1-threads artifact unavailable",
+            )
+        )
+    else:
+        tools.append(runtime_status("wasmtime-pulley-threads", None, None, "missing; set WASMTIME_BIN or install wasmtime"))
+        tools.append(runtime_status("wasmtime-jit-threads", None, None, "missing; set WASMTIME_BIN or install wasmtime"))
 
     sizes = {item["name"]: binary_size(item["binary"]) for item in tools}
 
