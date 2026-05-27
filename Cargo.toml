@@ -1,0 +1,15 @@
+[package]
+name = "embedded-runtime-benchmarking"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wasip1_threads)'] }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
