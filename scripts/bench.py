@@ -418,7 +418,8 @@ The threaded WAMR comparison uses a second WAMR 2.4.4 fast-interpreter binary wi
 ## Case Rewrite Policy
 
 - The Rust code uses edition 2024 and the pinned `{report["host"]["rustc"].split()[1]}` toolchain in `rust-toolchain.toml`.
-- Standard-library containers are used where appropriate: `VecDeque` for scheduler queues, `BTreeSet` for Earley chart states, and `BTreeMap` for the ordered-map workload inspired by Splay.
+- The Rust cases are not line-by-line ports of the JavaScript file. They keep the same broad workload names while using Rust-friendly representations: fixed arrays for small static networks, arena/index-style constraint plans for DeltaBlue, precomputed ray data for RayTrace, byte slices for the ASCII DNA workload, and reusable buffers for grid simulation.
+- Standard-library containers are used where appropriate: `VecDeque` for Richards scheduler queues, compact `Vec` state sets for the small Earley chart, and `BTreeMap` for the ordered-map workload inspired by Splay.
 - The threaded Rust cases use `std::thread` with deterministic per-worker checksum reduction. Each worker runs a disjoint iteration chunk; no shared mutable benchmark state is used.
 - No external crates are required, keeping native and WASI builds reproducible in an empty repository.
 

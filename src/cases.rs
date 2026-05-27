@@ -1,4 +1,5 @@
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::array;
+use std::collections::{BTreeMap, VecDeque};
 
 pub struct Case {
     pub name: &'static str,
@@ -66,16 +67,14 @@ struct Packet {
 
 pub(crate) fn richards(iterations: u64) -> u64 {
     const TASKS: usize = 6;
-    let mut queues: Vec<VecDeque<Packet>> = (0..TASKS)
-        .map(|task| {
-            let mut queue = VecDeque::new();
-            queue.push_back(Packet {
-                target: (task + 1) % TASKS,
-                value: mix(task as u64, 1),
-            });
-            queue
-        })
-        .collect();
+    let mut queues: [VecDeque<Packet>; TASKS] = array::from_fn(|task| {
+        let mut queue = VecDeque::new();
+        queue.push_back(Packet {
+            target: (task + 1) % TASKS,
+            value: mix(task as u64, 1),
+        });
+        queue
+    });
     let mut state = [0_u64; TASKS];
 
     for tick in 0..iterations {
@@ -115,106 +114,152 @@ pub(crate) fn richards(iterations: u64) -> u64 {
 }
 
 #[derive(Clone, Copy)]
-struct Constraint {
-    left: usize,
-    right: usize,
-    output: usize,
-    scale: f64,
-    bias: f64,
+enum DbConstraint {
+    Equality {
+        source: usize,
+        target: usize,
+    },
+    Scale {
+        source: usize,
+        target: usize,
+        scale: f64,
+        offset: f64,
+    },
+}
+
+impl DbConstraint {
+    #[inline]
+    fn execute(self, values: &mut [f64]) {
+        match self {
+            Self::Equality { source, target } => {
+                values[target] = values[source];
+            }
+            Self::Scale {
+                source,
+                target,
+                scale,
+                offset,
+            } => {
+                values[target] = values[source].mul_add(scale, offset);
+            }
+        }
+    }
 }
 
 pub(crate) fn delta_blue(iterations: u64) -> u64 {
-    let mut values: Vec<f64> = (0..96).map(|index| (index as f64 + 1.0) * 0.25).collect();
-    let constraints: Vec<Constraint> = (0..192)
-        .map(|index| Constraint {
-            left: index % values.len(),
-            right: (index * 7 + 13) % values.len(),
-            output: (index * 11 + 17) % values.len(),
+    const CHAIN: usize = 96;
+    const PROJECTIONS: usize = 64;
+    const VALUE_COUNT: usize = CHAIN + PROJECTIONS * 2;
+
+    let mut values: [f64; VALUE_COUNT] = array::from_fn(|index| (index as f64 + 1.0) * 0.25);
+    let chain: [DbConstraint; CHAIN - 1] = array::from_fn(|index| DbConstraint::Equality {
+        source: index,
+        target: index + 1,
+    });
+    let projections: [DbConstraint; PROJECTIONS] = array::from_fn(|index| {
+        let source = CHAIN + index;
+        DbConstraint::Scale {
+            source,
+            target: CHAIN + PROJECTIONS + index,
             scale: 0.875 + (index % 9) as f64 * 0.03125,
-            bias: (index % 5) as f64 - 2.0,
-        })
-        .collect();
+            offset: (index % 5) as f64 - 2.0,
+        }
+    });
+
+    let mut checksum = 0_u64;
 
     for step in 0..iterations {
-        let anchor = step as usize % values.len();
         values[0] = (step as f64 + 1.0) * 0.125;
-        values[anchor] = values[anchor].mul_add(0.5, step as f64 * 0.015625);
-
-        for _ in 0..3 {
-            for constraint in &constraints {
-                let propagated = values[constraint.left].mul_add(
-                    constraint.scale,
-                    values[constraint.right] * 0.125 + constraint.bias,
-                );
-                values[constraint.output] = propagated.mul_add(0.999, constraint.bias * 0.001);
-            }
+        for &constraint in &chain {
+            constraint.execute(&mut values);
         }
+
+        let projection_seed = step as usize % PROJECTIONS;
+        for index in 0..PROJECTIONS {
+            let source = CHAIN + index;
+            values[source] = values[source].mul_add(
+                0.5,
+                values[(projection_seed + index) % CHAIN] * 0.25 + step as f64 * 0.015625,
+            );
+        }
+        for &constraint in &projections {
+            constraint.execute(&mut values);
+        }
+
+        let changed = CHAIN + PROJECTIONS + projection_seed;
+        values[CHAIN + projection_seed] =
+            values[changed].mul_add(0.125, values[projection_seed] * 0.875);
+
+        checksum = mix(
+            checksum,
+            values[CHAIN - 1].to_bits()
+                ^ values[CHAIN + PROJECTIONS + ((step as usize * 13) % PROJECTIONS)].to_bits()
+                ^ step,
+        );
     }
 
     values
         .iter()
         .enumerate()
-        .fold(0_u64, |acc, (index, value)| {
+        .fold(checksum, |acc, (index, value)| {
             mix(acc, value.to_bits() ^ index as u64)
         })
 }
 
 pub(crate) fn crypto(iterations: u64) -> u64 {
-    let mut data: Vec<u8> = (0..4096)
-        .map(|index| mix(index, 0x51ed_270b).to_le_bytes()[0])
-        .collect();
+    const WORDS: usize = 512;
+    let mut data: [u64; WORDS] = array::from_fn(|index| mix(index as u64, 0x51ed_270b));
     let mut state = 0x243f_6a88_85a3_08d3_u64;
 
     for round in 0..iterations.saturating_mul(12) {
-        for chunk in data.chunks_exact_mut(8) {
-            let mut bytes = [0_u8; 8];
-            bytes.copy_from_slice(chunk);
-            let word = u64::from_le_bytes(bytes);
-            state = mix(state.rotate_left(9), word ^ round);
-            chunk.copy_from_slice(&state.to_le_bytes());
+        for word in &mut data {
+            state = mix(state.rotate_left(9), *word ^ round);
+            *word = state;
         }
 
-        let rotation = (round as usize % (data.len() - 1)) + 1;
+        let rotation = (round as usize % (WORDS - 1)) + 1;
         data.rotate_left(rotation);
     }
 
-    data.chunks_exact(8)
+    data.iter()
         .enumerate()
-        .fold(state, |acc, (index, chunk)| {
-            let mut bytes = [0_u8; 8];
-            bytes.copy_from_slice(chunk);
-            mix(acc ^ index as u64, u64::from_le_bytes(bytes))
-        })
+        .fold(state, |acc, (index, word)| mix(acc ^ index as u64, *word))
 }
 
 #[derive(Clone, Copy)]
 struct Vec3 {
-    x: f64,
-    y: f64,
-    z: f64,
+    x: f32,
+    y: f32,
+    z: f32,
 }
 
 impl Vec3 {
-    fn new(x: f64, y: f64, z: f64) -> Self {
+    #[inline]
+    fn new(x: f32, y: f32, z: f32) -> Self {
         Self { x, y, z }
     }
 
+    #[inline]
     fn add(self, rhs: Self) -> Self {
         Self::new(self.x + rhs.x, self.y + rhs.y, self.z + rhs.z)
     }
 
+    #[inline]
     fn sub(self, rhs: Self) -> Self {
         Self::new(self.x - rhs.x, self.y - rhs.y, self.z - rhs.z)
     }
 
-    fn scale(self, factor: f64) -> Self {
+    #[inline]
+    fn scale(self, factor: f32) -> Self {
         Self::new(self.x * factor, self.y * factor, self.z * factor)
     }
 
-    fn dot(self, rhs: Self) -> f64 {
+    #[inline]
+    fn dot(self, rhs: Self) -> f32 {
         self.x.mul_add(rhs.x, self.y.mul_add(rhs.y, self.z * rhs.z))
     }
 
+    #[inline]
     fn normalize(self) -> Self {
         let length = self.dot(self).sqrt();
         if length == 0.0 {
@@ -225,13 +270,17 @@ impl Vec3 {
     }
 }
 
+#[derive(Clone, Copy)]
 struct Sphere {
     center: Vec3,
-    radius: f64,
-    albedo: f64,
+    radius: f32,
+    albedo: f32,
 }
 
 pub(crate) fn ray_trace(iterations: u64) -> u64 {
+    const WIDTH: usize = 36;
+    const HEIGHT: usize = 28;
+
     let spheres = [
         Sphere {
             center: Vec3::new(-1.25, -0.2, 3.6),
@@ -254,38 +303,48 @@ pub(crate) fn ray_trace(iterations: u64) -> u64 {
             albedo: 0.9,
         },
     ];
+    let rays: [Vec3; WIDTH * HEIGHT] = array::from_fn(|pixel| {
+        let x = pixel % WIDTH;
+        let y = pixel / WIDTH;
+        Vec3::new((x as f32 - 18.0) / 22.0, (14.0 - y as f32) / 22.0, 1.0).normalize()
+    });
+    let light_direction = Vec3::new(-0.4, 0.9, -0.3).normalize();
 
     let mut checksum = 0_u64;
     for frame in 0..iterations {
-        let camera = Vec3::new((frame as f64 * 0.011).sin() * 0.25, 0.15, -2.75);
-        for y in 0..28 {
-            for x in 0..36 {
+        let camera = Vec3::new((frame as f32 * 0.011).sin() * 0.25, 0.15, -2.75);
+        for y in 0..HEIGHT {
+            let sky_light = 0.2 + 0.03 * y as f32;
+            for x in 0..WIDTH {
+                let pixel = y * WIDTH + x;
                 let mut origin = camera;
-                let mut direction =
-                    Vec3::new((x as f64 - 18.0) / 22.0, (14.0 - y as f64) / 22.0, 1.0).normalize();
-                let mut light = 0.0;
-                let mut throughput = 1.0;
+                let mut direction = rays[pixel];
+                let mut light = 0.0_f32;
+                let mut throughput = 1.0_f32;
 
                 for bounce in 0..2 {
-                    let mut closest: Option<(f64, &Sphere)> = None;
-                    for sphere in &spheres {
+                    let mut closest_distance = f32::INFINITY;
+                    let mut closest_sphere = None;
+                    for (sphere_index, sphere) in spheres.iter().enumerate() {
                         if let Some(distance) = intersect_sphere(origin, direction, sphere) {
-                            if closest.map_or(true, |(best, _)| distance < best) {
-                                closest = Some((distance, sphere));
+                            if distance < closest_distance {
+                                closest_distance = distance;
+                                closest_sphere = Some(sphere_index);
                             }
                         }
                     }
 
-                    let Some((distance, sphere)) = closest else {
-                        light += throughput * (0.2 + 0.03 * y as f64);
+                    let Some(sphere_index) = closest_sphere else {
+                        light += throughput * sky_light;
                         break;
                     };
+                    let sphere = spheres[sphere_index];
 
-                    let hit = origin.add(direction.scale(distance));
+                    let hit = origin.add(direction.scale(closest_distance));
                     let normal = hit.sub(sphere.center).normalize();
-                    let lambert = normal.dot(Vec3::new(-0.4, 0.9, -0.3).normalize()).max(0.0);
+                    let lambert = normal.dot(light_direction).max(0.0);
                     light += throughput * sphere.albedo * lambert;
-                    throughput *= 0.42 + bounce as f64 * 0.08;
+                    throughput *= 0.42 + bounce as f32 * 0.08;
                     origin = hit.add(normal.scale(0.001));
                     direction = direction
                         .sub(normal.scale(2.0 * direction.dot(normal)))
@@ -294,7 +353,8 @@ pub(crate) fn ray_trace(iterations: u64) -> u64 {
 
                 checksum = mix(
                     checksum,
-                    light.to_bits() ^ ((frame << 16) + (y * 36 + x) as u64),
+                    ((light * 1_000_003.0) as u64)
+                        ^ (frame * (WIDTH * HEIGHT) as u64 + pixel as u64),
                 );
             }
         }
@@ -303,7 +363,8 @@ pub(crate) fn ray_trace(iterations: u64) -> u64 {
     checksum
 }
 
-fn intersect_sphere(origin: Vec3, direction: Vec3, sphere: &Sphere) -> Option<f64> {
+#[inline]
+fn intersect_sphere(origin: Vec3, direction: Vec3, sphere: &Sphere) -> Option<f32> {
     let oc = origin.sub(sphere.center);
     let b = oc.dot(direction);
     let c = oc.dot(oc) - sphere.radius * sphere.radius;
@@ -316,11 +377,39 @@ fn intersect_sphere(origin: Vec3, direction: Vec3, sphere: &Sphere) -> Option<f6
     (distance > 0.001).then_some(distance)
 }
 
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 struct EarleyState {
     rule: usize,
     dot: usize,
     origin: usize,
+}
+
+#[derive(Clone)]
+struct StateSet {
+    states: Vec<EarleyState>,
+}
+
+impl StateSet {
+    fn new() -> Self {
+        Self { states: Vec::new() }
+    }
+
+    fn insert(&mut self, state: EarleyState) -> bool {
+        if self.states.contains(&state) {
+            false
+        } else {
+            self.states.push(state);
+            true
+        }
+    }
+
+    fn contains(&self, state: &EarleyState) -> bool {
+        self.states.contains(state)
+    }
+
+    fn len(&self) -> usize {
+        self.states.len()
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -431,8 +520,7 @@ fn expression_tokens(seed: u64, terms: usize) -> Vec<u8> {
 }
 
 fn earley_parse(tokens: &[u8]) -> (bool, usize) {
-    let mut chart: Vec<BTreeSet<EarleyState>> =
-        (0..=tokens.len()).map(|_| BTreeSet::new()).collect();
+    let mut chart: Vec<StateSet> = (0..=tokens.len()).map(|_| StateSet::new()).collect();
     chart[0].insert(EarleyState {
         rule: 0,
         dot: 0,
@@ -442,7 +530,7 @@ fn earley_parse(tokens: &[u8]) -> (bool, usize) {
     for index in 0..=tokens.len() {
         loop {
             let before = chart[index].len();
-            let states: Vec<EarleyState> = chart[index].iter().copied().collect();
+            let states = chart[index].states.clone();
 
             for state in states {
                 match GRAMMAR[state.rule].rhs.get(state.dot) {
@@ -468,8 +556,7 @@ fn earley_parse(tokens: &[u8]) -> (bool, usize) {
                     }
                     None => {
                         let completed_lhs = GRAMMAR[state.rule].lhs;
-                        let origin_states: Vec<EarleyState> =
-                            chart[state.origin].iter().copied().collect();
+                        let origin_states = chart[state.origin].states.clone();
                         for previous in origin_states {
                             if GRAMMAR[previous.rule].rhs.get(previous.dot)
                                 == Some(&Symbol::NonTerm(completed_lhs))
@@ -496,7 +583,7 @@ fn earley_parse(tokens: &[u8]) -> (bool, usize) {
         dot: 1,
         origin: 0,
     });
-    let total_states = chart.iter().map(BTreeSet::len).sum();
+    let total_states = chart.iter().map(StateSet::len).sum();
     (accepted, total_states)
 }
 
@@ -533,44 +620,52 @@ fn boyer_rewrite(seed: u64) -> u64 {
 }
 
 pub(crate) fn regexp(iterations: u64) -> u64 {
-    const PATTERNS: &[&str] = &[
-        "agggtaaa", "tttaccct", "cgggtaaa", "gggtaaat", "taaaacc", "gtaac",
+    const PATTERNS: &[&[u8]] = &[
+        b"agggtaaa",
+        b"tttaccct",
+        b"cgggtaaa",
+        b"gggtaaat",
+        b"taaaacc",
+        b"gtaac",
     ];
     let alphabet = [b'a', b'c', b'g', b't'];
-    let mut dna = String::with_capacity(8192);
-    for index in 0..8192 {
-        dna.push(alphabet[(mix(index, 17) & 3) as usize] as char);
-    }
+    let mut dna: Vec<u8> = (0..8192)
+        .map(|index| alphabet[(mix(index, 17) & 3) as usize])
+        .collect();
 
     let mut checksum = 0_u64;
     for iteration in 0..iterations {
         if iteration % 8 == 0 {
-            dna = dna.chars().rev().collect();
+            dna.reverse();
         }
 
         for pattern in PATTERNS {
             checksum = mix(checksum, count_overlapping(&dna, pattern) as u64);
         }
 
-        let gc = dna
-            .bytes()
-            .filter(|byte| matches!(byte, b'g' | b'c'))
-            .count();
-        let runs = dna.split('a').filter(|segment| !segment.is_empty()).count();
+        let mut gc = 0_usize;
+        let mut runs = 0_usize;
+        let mut in_run = false;
+        for &byte in &dna {
+            gc += usize::from(matches!(byte, b'g' | b'c'));
+            if byte == b'a' {
+                in_run = false;
+            } else if !in_run {
+                runs += 1;
+                in_run = true;
+            }
+        }
         checksum = mix(checksum ^ gc as u64, runs as u64 ^ iteration);
     }
 
     checksum
 }
 
-fn count_overlapping(haystack: &str, needle: &str) -> usize {
-    let mut count = 0;
-    let mut start = 0;
-    while let Some(position) = haystack[start..].find(needle) {
-        count += 1;
-        start += position + 1;
-    }
-    count
+fn count_overlapping(haystack: &[u8], needle: &[u8]) -> usize {
+    haystack
+        .windows(needle.len())
+        .filter(|window| *window == needle)
+        .count()
 }
 
 pub(crate) fn splay(iterations: u64) -> u64 {
@@ -608,47 +703,49 @@ pub(crate) fn navier_stokes(iterations: u64) -> u64 {
     const N: usize = 32;
     let size = (N + 2) * (N + 2);
     let mut density = vec![0.0_f64; size];
+    let mut previous_density = vec![0.0_f64; size];
     let mut velocity_x = vec![0.0_f64; size];
     let mut velocity_y = vec![0.0_f64; size];
 
-    let idx = |x: usize, y: usize| y * (N + 2) + x;
+    let stride = N + 2;
     for step in 0..iterations {
         let center_x = 8 + (step as usize % 17);
         let center_y = 8 + ((step as usize * 5) % 17);
-        let center = idx(center_x, center_y);
+        let center = grid_index(stride, center_x, center_y);
         density[center] += 24.0 + (step % 7) as f64;
         velocity_x[center] += (step as f64 * 0.13).sin() * 0.7;
         velocity_y[center] += (step as f64 * 0.17).cos() * 0.7;
 
         for _ in 0..4 {
             for y in 1..=N {
+                let row = y * stride;
                 for x in 1..=N {
-                    let current = idx(x, y);
+                    let current = row + x;
                     density[current] = (density[current]
-                        + density[idx(x - 1, y)]
-                        + density[idx(x + 1, y)]
-                        + density[idx(x, y - 1)]
-                        + density[idx(x, y + 1)])
+                        + density[current - 1]
+                        + density[current + 1]
+                        + density[current - stride]
+                        + density[current + stride])
                         * 0.2;
-                    velocity_x[current] = (velocity_x[current]
-                        + velocity_x[idx(x - 1, y)]
-                        + velocity_x[idx(x + 1, y)])
-                        / 3.0;
+                    velocity_x[current] =
+                        (velocity_x[current] + velocity_x[current - 1] + velocity_x[current + 1])
+                            / 3.0;
                     velocity_y[current] = (velocity_y[current]
-                        + velocity_y[idx(x, y - 1)]
-                        + velocity_y[idx(x, y + 1)])
+                        + velocity_y[current - stride]
+                        + velocity_y[current + stride])
                         / 3.0;
                 }
             }
         }
 
-        let previous = density.clone();
+        previous_density.copy_from_slice(&density);
         for y in 1..=N {
+            let row = y * stride;
             for x in 1..=N {
-                let current = idx(x, y);
+                let current = row + x;
                 let source_x = (x as f64 - velocity_x[current]).clamp(1.0, N as f64);
                 let source_y = (y as f64 - velocity_y[current]).clamp(1.0, N as f64);
-                density[current] = bilinear_sample(&previous, N, source_x, source_y);
+                density[current] = bilinear_sample(&previous_density, N, source_x, source_y);
             }
         }
     }
@@ -661,6 +758,11 @@ pub(crate) fn navier_stokes(iterations: u64) -> u64 {
         })
 }
 
+#[inline]
+fn grid_index(stride: usize, x: usize, y: usize) -> usize {
+    y * stride + x
+}
+
 fn bilinear_sample(field: &[f64], n: usize, x: f64, y: f64) -> f64 {
     let x0 = x.floor() as usize;
     let y0 = y.floor() as usize;
@@ -668,9 +770,11 @@ fn bilinear_sample(field: &[f64], n: usize, x: f64, y: f64) -> f64 {
     let y1 = (y0 + 1).min(n);
     let sx = x - x0 as f64;
     let sy = y - y0 as f64;
-    let idx = |px: usize, py: usize| py * (n + 2) + px;
+    let stride = n + 2;
 
-    let top = field[idx(x0, y0)].mul_add(1.0 - sx, field[idx(x1, y0)] * sx);
-    let bottom = field[idx(x0, y1)].mul_add(1.0 - sx, field[idx(x1, y1)] * sx);
+    let top =
+        field[grid_index(stride, x0, y0)].mul_add(1.0 - sx, field[grid_index(stride, x1, y0)] * sx);
+    let bottom =
+        field[grid_index(stride, x0, y1)].mul_add(1.0 - sx, field[grid_index(stride, x1, y1)] * sx);
     top.mul_add(1.0 - sy, bottom * sy)
 }

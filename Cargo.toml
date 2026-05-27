@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [lints.rust]
+unsafe_code = "forbid"
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wasip1_threads)'] }
 
 [profile.release]

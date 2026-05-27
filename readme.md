@@ -4,7 +4,7 @@ This repository benchmarks the V8 v7-style workload shape used by [ahaoboy/js-en
 
 ## Current Machine
 
-- Generated at: `2026-05-27T07:01:54+00:00`
+- Generated at: `2026-05-27T07:19:09+00:00`
 - Host: `Darwin arm64`
 - Rust: `rustc 1.95.0 (59807616e 2026-04-14)`
 - Cargo: `cargo 1.95.0 (f2d3ce0bd 2026-03-21)`
@@ -29,14 +29,14 @@ Median elapsed time in milliseconds. Lower is better.
 
 | Case | quickjs | primjs | wamr-fast-interp | wamr-fast-interp-threads | Fastest |
 | --- | --- | --- | --- | --- | --- |
-| Richards | 23.000 | 34.000 | 5.001 | 1.526 | wamr-fast-interp-threads |
-| DeltaBlue | 16.000 | 16.000 | 84.941 | 21.986 | quickjs |
-| Crypto | 527.000 | 840.000 | 19.682 | 5.508 | wamr-fast-interp-threads |
-| RayTrace | 34.000 | 42.000 | 59.583 | 14.153 | wamr-fast-interp-threads |
-| EarleyBoyer | 15.000 | 24.000 | 9.515 | 18.820 | wamr-fast-interp |
-| RegExp | 85.000 | 113.000 | 137.066 | 33.674 | wamr-fast-interp-threads |
-| Splay | 727.000 | 1386.000 | 6.172 | 3.346 | wamr-fast-interp-threads |
-| NavierStokes | 38.000 | 44.000 | 14.866 | 3.381 | wamr-fast-interp-threads |
+| Richards | 24.000 | 34.000 | 4.972 | 1.500 | wamr-fast-interp-threads |
+| DeltaBlue | 16.000 | 16.000 | 12.036 | 2.742 | wamr-fast-interp-threads |
+| Crypto | 536.000 | 837.000 | 18.113 | 5.313 | wamr-fast-interp-threads |
+| RayTrace | 35.000 | 41.000 | 17.010 | 3.867 | wamr-fast-interp-threads |
+| EarleyBoyer | 15.000 | 24.000 | 8.328 | 18.098 | wamr-fast-interp |
+| RegExp | 84.000 | 112.000 | 75.499 | 19.136 | wamr-fast-interp-threads |
+| Splay | 701.000 | 1403.000 | 6.260 | 3.190 | wamr-fast-interp-threads |
+| NavierStokes | 38.000 | 44.000 | 14.978 | 3.294 | wamr-fast-interp-threads |
 
 ## Notes
 
@@ -114,7 +114,8 @@ The threaded WAMR comparison uses a second WAMR 2.4.4 fast-interpreter binary wi
 ## Case Rewrite Policy
 
 - The Rust code uses edition 2024 and the pinned `1.95.0` toolchain in `rust-toolchain.toml`.
-- Standard-library containers are used where appropriate: `VecDeque` for scheduler queues, `BTreeSet` for Earley chart states, and `BTreeMap` for the ordered-map workload inspired by Splay.
+- The Rust cases are not line-by-line ports of the JavaScript file. They keep the same broad workload names while using Rust-friendly representations: fixed arrays for small static networks, arena/index-style constraint plans for DeltaBlue, precomputed ray data for RayTrace, byte slices for the ASCII DNA workload, and reusable buffers for grid simulation.
+- Standard-library containers are used where appropriate: `VecDeque` for Richards scheduler queues, compact `Vec` state sets for the small Earley chart, and `BTreeMap` for the ordered-map workload inspired by Splay.
 - The threaded Rust cases use `std::thread` with deterministic per-worker checksum reduction. Each worker runs a disjoint iteration chunk; no shared mutable benchmark state is used.
 - No external crates are required, keeping native and WASI builds reproducible in an empty repository.
 
