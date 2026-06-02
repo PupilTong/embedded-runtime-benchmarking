@@ -33,8 +33,10 @@ RUNTIMES = [
     "wamr-fast-interp",
     "wamr-fast-interp-threads",
     "wasmtime-pulley",
+    "wasmtime-pulley-tail",
     "wasmtime-jit",
     "wasmtime-pulley-threads",
+    "wasmtime-pulley-tail-threads",
     "wasmtime-jit-threads",
 ]
 INTERPRETER_RUNTIMES = [
@@ -43,7 +45,9 @@ INTERPRETER_RUNTIMES = [
     "wamr-fast-interp",
     "wamr-fast-interp-threads",
     "wasmtime-pulley",
+    "wasmtime-pulley-tail",
     "wasmtime-pulley-threads",
+    "wasmtime-pulley-tail-threads",
 ]
 
 WAMR_STABLE_RUST_FEATURES = [
@@ -537,7 +541,7 @@ python3 scripts/bench.py --samples 5 --scale 1
 Runtime binaries can be overridden with environment variables:
 
 ```sh
-QUICKJS_BIN=/path/to/qjs PRIMJS_BIN=/path/to/primjs IWASM_BIN=/path/to/iwasm IWASM_THREADS_BIN=/path/to/iwasm WASMTIME_BIN=/path/to/wasmtime WASM_OPT_BIN=/path/to/wasm-opt python3 scripts/bench.py
+QUICKJS_BIN=/path/to/qjs PRIMJS_BIN=/path/to/primjs IWASM_BIN=/path/to/iwasm IWASM_THREADS_BIN=/path/to/iwasm WASMTIME_BIN=/path/to/wasmtime WASMTIME_PULLEY_TAIL_BIN=/path/to/wasmtime-tail WASM_OPT_BIN=/path/to/wasm-opt python3 scripts/bench.py
 ```
 
 On macOS, Homebrew can provide the external optimizer/runtime tools:
@@ -601,19 +605,27 @@ The Wasmtime comparisons use the same optimized scalar `wasm32-wasip1` artifact 
 
 ```sh
 wasmtime run -C cache=n --target pulley64 artifacts/embedded-runtime-benchmarking.wasip1.opt.wasm
+tools/wasmtime-pulley-tail-nightly/bin/wasmtime run -C cache=n --target pulley64 artifacts/embedded-runtime-benchmarking.wasip1.opt.wasm
 wasmtime run -C cache=n -C compiler=cranelift artifacts/embedded-runtime-benchmarking.wasip1.opt.wasm
 ```
 
-`wasmtime-pulley` selects Wasmtime's portable interpreter by using the Pulley target. `wasmtime-jit` selects Cranelift explicitly. Both disable Wasmtime's persistent compilation cache with `-C cache=n` so results are not affected by a previous command-line cache entry.
+`wasmtime-pulley` selects Wasmtime's portable interpreter by using the Pulley target. `wasmtime-pulley-tail` uses a separately built Wasmtime 45.0.0 CLI with Pulley's nightly-only guaranteed tail-call loop enabled:
+
+```sh
+RUSTFLAGS="--cfg=pulley_tail_calls" CARGO_TARGET_DIR=target/wasmtime-pulley-tail-nightly cargo +nightly install wasmtime-cli --version 45.0.0 --root tools/wasmtime-pulley-tail-nightly --features pulley --locked --force
+```
+
+The stable-Rust `--cfg=pulley_assume_llvm_makes_tail_calls` Pulley path was also tested on this macOS arm64 host and crashed with `Bus error: 10`, so it is not included in the results. `wasmtime-jit` selects Cranelift explicitly. All Wasmtime runs disable Wasmtime's persistent compilation cache with `-C cache=n` so results are not affected by a previous command-line cache entry.
 
 The Wasmtime threaded comparisons use the optimized `wasm32-wasip1-threads` artifact:
 
 ```sh
 wasmtime run -C cache=n --target pulley64 -S threads=y -W threads=y -W shared-memory=y artifacts/embedded-runtime-benchmarking.wasip1-threads.opt.wasm --threads --workers {report["options"]["workers"]}
+tools/wasmtime-pulley-tail-nightly/bin/wasmtime run -C cache=n --target pulley64 -S threads=y -W threads=y -W shared-memory=y artifacts/embedded-runtime-benchmarking.wasip1-threads.opt.wasm --threads --workers {report["options"]["workers"]}
 wasmtime run -C cache=n -C compiler=cranelift -S threads=y -W threads=y -W shared-memory=y artifacts/embedded-runtime-benchmarking.wasip1-threads.opt.wasm --threads --workers {report["options"]["workers"]}
 ```
 
-Wasmtime 45.0.0 on this host reports `wasm_threads` as unsupported for the Pulley compiler configuration, so `wasmtime-pulley-threads` is included in the status table but has no timing samples. `wasmtime-jit-threads` runs successfully with WASI threads enabled.
+Wasmtime 45.0.0 on this host reports `wasm_threads` as unsupported for both Pulley compiler configurations, so `wasmtime-pulley-threads` and `wasmtime-pulley-tail-threads` are included in the status table but have no timing samples. `wasmtime-jit-threads` runs successfully with WASI threads enabled.
 
 ## Case Rewrite Policy
 
@@ -675,6 +687,10 @@ def main() -> int:
     iwasm_threads_candidates.append("iwasm")
     iwasm_threads = find_tool("IWASM_THREADS_BIN", iwasm_threads_candidates)
     wasmtime = find_tool("WASMTIME_BIN", [str(ROOT / "tools" / "wasmtime" / "bin" / "wasmtime"), "wasmtime"])
+    wasmtime_pulley_tail = find_tool(
+        "WASMTIME_PULLEY_TAIL_BIN",
+        [str(ROOT / "tools" / "wasmtime-pulley-tail-nightly" / "bin" / "wasmtime")],
+    )
     wasm_opt = find_tool("WASM_OPT_BIN", ["wasm-opt"])
     cargo = find_tool("CARGO_BIN", ["cargo"])
 
@@ -877,6 +893,55 @@ def main() -> int:
         tools.append(runtime_status("wasmtime-jit", None, None, "missing; set WASMTIME_BIN or install wasmtime"))
         notes.append("Wasmtime was not benchmarked because `wasmtime` was not found in PATH.")
 
+    if wasmtime_pulley_tail and wasm_ready:
+        version = f"{command_text([wasmtime_pulley_tail, '--version'])} (Pulley tail-call loop; nightly build)"
+        wasmtime_pulley_tail_samples, error = run_json_benchmark(
+            "wasmtime-pulley-tail",
+            [
+                wasmtime_pulley_tail,
+                "run",
+                "-C",
+                "cache=n",
+                "--target",
+                "pulley64",
+                str(WASM_OPT),
+                "--samples",
+                str(samples),
+                "--scale",
+                str(scale),
+            ],
+            args.timeout,
+        )
+        all_samples.extend(wasmtime_pulley_tail_samples)
+        tools.append(
+            runtime_status(
+                "wasmtime-pulley-tail",
+                wasmtime_pulley_tail,
+                version,
+                "ok" if not error else f"failed: {compact_error(error)}",
+            )
+        )
+    elif wasmtime_pulley_tail:
+        version = f"{command_text([wasmtime_pulley_tail, '--version'])} (Pulley tail-call loop; nightly build)"
+        tools.append(
+            runtime_status(
+                "wasmtime-pulley-tail",
+                wasmtime_pulley_tail,
+                version,
+                "skipped; optimized wasm artifact unavailable",
+            )
+        )
+    else:
+        tools.append(
+            runtime_status(
+                "wasmtime-pulley-tail",
+                None,
+                None,
+                "missing; set WASMTIME_PULLEY_TAIL_BIN or build tools/wasmtime-pulley-tail-nightly/bin/wasmtime",
+            )
+        )
+        notes.append("Wasmtime Pulley tail-call-loop was not benchmarked because the custom `wasmtime` binary was not found.")
+
     if wasmtime and wasm_threads_ready:
         version = command_text([wasmtime, "--version"])
         wasmtime_pulley_threads_samples, error = run_json_benchmark(
@@ -971,6 +1036,63 @@ def main() -> int:
     else:
         tools.append(runtime_status("wasmtime-pulley-threads", None, None, "missing; set WASMTIME_BIN or install wasmtime"))
         tools.append(runtime_status("wasmtime-jit-threads", None, None, "missing; set WASMTIME_BIN or install wasmtime"))
+
+    if wasmtime_pulley_tail and wasm_threads_ready:
+        version = f"{command_text([wasmtime_pulley_tail, '--version'])} (Pulley tail-call loop; nightly build)"
+        wasmtime_pulley_tail_threads_samples, error = run_json_benchmark(
+            "wasmtime-pulley-tail-threads",
+            [
+                wasmtime_pulley_tail,
+                "run",
+                "-C",
+                "cache=n",
+                "--target",
+                "pulley64",
+                "-S",
+                "threads=y",
+                "-W",
+                "threads=y",
+                "-W",
+                "shared-memory=y",
+                str(WASM_THREADS_OPT),
+                "--threads",
+                "--workers",
+                str(workers),
+                "--samples",
+                str(samples),
+                "--scale",
+                str(scale),
+            ],
+            args.timeout,
+        )
+        all_samples.extend(wasmtime_pulley_tail_threads_samples)
+        tools.append(
+            runtime_status(
+                "wasmtime-pulley-tail-threads",
+                wasmtime_pulley_tail,
+                version,
+                "ok" if not error else f"failed: {compact_error(error)}",
+            )
+        )
+    elif wasmtime_pulley_tail:
+        version = f"{command_text([wasmtime_pulley_tail, '--version'])} (Pulley tail-call loop; nightly build)"
+        tools.append(
+            runtime_status(
+                "wasmtime-pulley-tail-threads",
+                wasmtime_pulley_tail,
+                version,
+                "skipped; optimized wasm32-wasip1-threads artifact unavailable",
+            )
+        )
+    else:
+        tools.append(
+            runtime_status(
+                "wasmtime-pulley-tail-threads",
+                None,
+                None,
+                "missing; set WASMTIME_PULLEY_TAIL_BIN or build tools/wasmtime-pulley-tail-nightly/bin/wasmtime",
+            )
+        )
 
     sizes = {item["name"]: binary_size(item["binary"]) for item in tools}
 

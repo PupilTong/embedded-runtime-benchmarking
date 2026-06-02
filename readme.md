@@ -4,7 +4,7 @@ This repository benchmarks the V8 v7-style workload shape used by [ahaoboy/js-en
 
 ## Current Machine
 
-- Generated at: `2026-05-27T14:12:44+00:00`
+- Generated at: `2026-06-01T13:40:49+00:00`
 - Host: `Darwin arm64`
 - Rust: `rustc 1.95.0 (59807616e 2026-04-14)`
 - Cargo: `cargo 1.95.0 (f2d3ce0bd 2026-03-21)`
@@ -12,7 +12,7 @@ This repository benchmarks the V8 v7-style workload shape used by [ahaoboy/js-en
 - Samples per case: `5`
 - Scale: `1`
 - Thread workers: `4`
-- Valid sample rows: `280`
+- Valid sample rows: `320`
 
 ## Runtime Status
 
@@ -24,44 +24,46 @@ This repository benchmarks the V8 v7-style workload shape used by [ahaoboy/js-en
 | wamr-fast-interp-threads | /Users/bytedance/Documents/embedded-runtime-benchmarking/tools/wasm-micro-runtime/product-mini/platforms/darwin/build-threads-mem/iwasm | iwasm 2.4.4 | ok |
 | wasmtime-pulley | /opt/homebrew/bin/wasmtime | wasmtime 45.0.0 (377cd917a 2026-05-21) | ok |
 | wasmtime-jit | /opt/homebrew/bin/wasmtime | wasmtime 45.0.0 (377cd917a 2026-05-21) | ok |
+| wasmtime-pulley-tail | /Users/bytedance/Documents/embedded-runtime-benchmarking/tools/wasmtime-pulley-tail-nightly/bin/wasmtime | wasmtime 45.0.0 (Pulley tail-call loop; nightly build) | ok |
 | wasmtime-pulley-threads | /opt/homebrew/bin/wasmtime | wasmtime 45.0.0 (377cd917a 2026-05-21) | failed: Error: the wasm_threads feature is not supported on this compiler configuration |
 | wasmtime-jit-threads | /opt/homebrew/bin/wasmtime | wasmtime 45.0.0 (377cd917a 2026-05-21) | ok |
+| wasmtime-pulley-tail-threads | /Users/bytedance/Documents/embedded-runtime-benchmarking/tools/wasmtime-pulley-tail-nightly/bin/wasmtime | wasmtime 45.0.0 (Pulley tail-call loop; nightly build) | failed: Error: the wasm_threads feature is not supported on this compiler configuration |
 
 ## Results
 
 Median elapsed time in milliseconds. Lower is better.
 
-| Case | quickjs | primjs | wamr-fast-interp | wamr-fast-interp-threads | wasmtime-pulley | wasmtime-jit | wasmtime-pulley-threads | wasmtime-jit-threads | Fastest | Fastest Interpreter |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Richards | 23.000 | 32.000 | 5.036 | 1.506 | 5.104 | 0.442 | - | 0.204 | wasmtime-jit-threads | wamr-fast-interp-threads |
-| DeltaBlue | 15.000 | 15.000 | 11.272 | 2.823 | 19.637 | 0.420 | - | 0.175 | wasmtime-jit-threads | wamr-fast-interp-threads |
-| Crypto | 495.000 | 770.000 | 17.074 | 5.314 | 30.431 | 3.223 | - | 0.933 | wasmtime-jit-threads | wamr-fast-interp-threads |
-| RayTrace | 32.000 | 38.000 | 16.138 | 3.756 | 20.176 | 0.518 | - | 0.210 | wasmtime-jit-threads | wamr-fast-interp-threads |
-| EarleyBoyer | 14.000 | 22.000 | 7.716 | 18.069 | 11.802 | 0.596 | - | 1.734 | wasmtime-jit | wamr-fast-interp |
-| RegExp | 80.000 | 103.000 | 69.338 | 18.284 | 76.935 | 3.253 | - | 0.928 | wasmtime-jit-threads | wamr-fast-interp-threads |
-| Splay | 734.000 | 1282.000 | 5.825 | 3.183 | 9.034 | 0.927 | - | 0.509 | wasmtime-jit-threads | wamr-fast-interp-threads |
-| NavierStokes | 35.000 | 41.000 | 13.864 | 3.184 | 29.381 | 0.972 | - | 0.288 | wasmtime-jit-threads | wamr-fast-interp-threads |
+| Case | quickjs | primjs | wamr-fast-interp | wamr-fast-interp-threads | wasmtime-pulley | wasmtime-pulley-tail | wasmtime-jit | wasmtime-pulley-threads | wasmtime-pulley-tail-threads | wasmtime-jit-threads | Fastest | Fastest Interpreter |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Richards | 24.000 | 33.000 | 7.464 | 2.738 | 5.476 | 6.348 | 0.458 | - | - | 0.203 | wasmtime-jit-threads | wamr-fast-interp-threads |
+| DeltaBlue | 16.000 | 15.000 | 12.604 | 3.973 | 21.093 | 11.846 | 0.452 | - | - | 0.182 | wasmtime-jit-threads | wamr-fast-interp-threads |
+| Crypto | 521.000 | 800.000 | 17.496 | 5.794 | 31.893 | 23.284 | 3.253 | - | - | 0.937 | wasmtime-jit-threads | wamr-fast-interp-threads |
+| RayTrace | 34.000 | 40.000 | 16.345 | 3.983 | 20.689 | 10.363 | 0.527 | - | - | 0.206 | wasmtime-jit-threads | wamr-fast-interp-threads |
+| EarleyBoyer | 14.000 | 23.000 | 7.926 | 18.289 | 12.095 | 13.245 | 0.615 | - | - | 1.605 | wasmtime-jit | wamr-fast-interp |
+| RegExp | 82.000 | 105.000 | 71.765 | 18.845 | 79.573 | 79.343 | 3.419 | - | - | 1.471 | wasmtime-jit-threads | wamr-fast-interp-threads |
+| Splay | 657.000 | 1307.000 | 5.945 | 3.266 | 9.409 | 10.798 | 0.999 | - | - | 0.860 | wasmtime-jit-threads | wamr-fast-interp-threads |
+| NavierStokes | 37.000 | 42.000 | 14.435 | 3.189 | 30.063 | 17.995 | 0.981 | - | - | 0.432 | wasmtime-jit-threads | wamr-fast-interp-threads |
 
 ## V8 V7 Style Score
 
 Higher is better. This table follows the score shape from `ahaoboy/js-engine-benchmark`'s V8 v7 harness: each case score is `100 * reference / median_us`, then `Score` is the geometric mean of the case scores. The reference constants are the `BenchmarkSuite(..., reference, ...)` values from the upstream V8 v7 case files. `Score/MB` follows upstream as `Score / Total size in MiB`, where `Total size = Exe size + Dll size` for the runtime binary. This repository uses median full-sample timings rather than the upstream one-second harness average, so the scores are intended for comparing rows in this report, not as official V8/Octane scores.
 
-| Metric | wasmtime-jit-threads | wasmtime-jit | wamr-fast-interp-threads | wamr-fast-interp | wasmtime-pulley | quickjs | primjs | wasmtime-pulley-threads |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Version | wasmtime 45.0.0 (377cd917a 2026-05-21) | wasmtime 45.0.0 (377cd917a 2026-05-21) | iwasm 2.4.4 | iwasm 2.4.4 | wasmtime 45.0.0 (377cd917a 2026-05-21) | QuickJS version 2025-09-13 | PrimJS 2.11.1-rc.1 | wasmtime 45.0.0 (377cd917a 2026-05-21) |
-| Total size | 46M | 46M | 540.9K | 522K | 46M | 950.4K | 2.4M | 46M |
-| Exe size | 46M | 46M | 540.9K | 522K | 46M | 950.4K | 2.4M | 46M |
-| Dll size | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| Richards | 17273 | 7996 | 2344 | 701 | 692 | 153 | 110 | - |
-| DeltaBlue | 37710 | 15730 | 2342 | 587 | 337 | 441 | 441 | - |
-| Crypto | 28530 | 8258 | 5009 | 1559 | 875 | 53.8 | 34.6 | - |
-| RayTrace | 352166 | 142844 | 19702 | 4585 | 3668 | 2312 | 1947 | - |
-| EarleyBoyer | 38434 | 111744 | 3688 | 8637 | 5647 | 4760 | 3029 | - |
-| RegExp | 98184 | 28003 | 4982 | 1314 | 1184 | 1139 | 884 | - |
-| Splay | 15998 | 8791 | 2560 | 1399 | 902 | 11.1 | 6.36 | - |
-| NavierStokes | 515650 | 152727 | 46608 | 10704 | 5051 | 4240 | 3620 | - |
-| Score | 61466 | 29808 | 5746 | 2174 | 1478 | 464 | 345 | - |
-| Score/MB | 1336 | 648 | 10878 | 4265 | 32 | 499 | 146 | - |
+| Metric | wasmtime-jit-threads | wasmtime-jit | wamr-fast-interp-threads | wamr-fast-interp | wasmtime-pulley-tail | wasmtime-pulley | quickjs | primjs | wasmtime-pulley-threads | wasmtime-pulley-tail-threads |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Version | wasmtime 45.0.0 (377cd917a 2026-05-21) | wasmtime 45.0.0 (377cd917a 2026-05-21) | iwasm 2.4.4 | iwasm 2.4.4 | wasmtime 45.0.0 (Pulley tail-call loop; nightly build) | wasmtime 45.0.0 (377cd917a 2026-05-21) | QuickJS version 2025-09-13 | PrimJS 2.11.1-rc.1 | wasmtime 45.0.0 (377cd917a 2026-05-21) | wasmtime 45.0.0 (Pulley tail-call loop; nightly build) |
+| Total size | 46M | 46M | 540.9K | 522K | 66.3M | 46M | 950.4K | 2.4M | 46M | 66.3M |
+| Exe size | 46M | 46M | 540.9K | 522K | 66.3M | 46M | 950.4K | 2.4M | 46M | 66.3M |
+| Dll size | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Richards | 17412 | 7716 | 1289 | 473 | 556 | 645 | 147 | 107 | - | - |
+| DeltaBlue | 36254 | 14620 | 1664 | 525 | 558 | 313 | 413 | 441 | - | - |
+| Crypto | 28405 | 8183 | 4594 | 1521 | 1143 | 835 | 51.1 | 33.3 | - | - |
+| RayTrace | 358783 | 140371 | 18579 | 4527 | 7141 | 3577 | 2176 | 1850 | - | - |
+| EarleyBoyer | 41528 | 108419 | 3644 | 8409 | 5032 | 5510 | 4760 | 2898 | - | - |
+| RegExp | 61919 | 26643 | 4834 | 1269 | 1148 | 1145 | 1111 | 868 | - | - |
+| Splay | 9478 | 8156 | 2495 | 1371 | 755 | 866 | 12.4 | 6.23 | - | - |
+| NavierStokes | 343784 | 151345 | 46535 | 10281 | 8247 | 4936 | 4011 | 3533 | - | - |
+| Score | 52054 | 28714 | 4974 | 2001 | 1758 | 1417 | 453 | 336 | - | - |
+| Score/MB | 1132 | 624 | 9417 | 3925 | 26 | 30 | 488 | 141 | - | - |
 
 ## Notes
 
@@ -76,7 +78,7 @@ python3 scripts/bench.py --samples 5 --scale 1
 Runtime binaries can be overridden with environment variables:
 
 ```sh
-QUICKJS_BIN=/path/to/qjs PRIMJS_BIN=/path/to/primjs IWASM_BIN=/path/to/iwasm IWASM_THREADS_BIN=/path/to/iwasm WASMTIME_BIN=/path/to/wasmtime WASM_OPT_BIN=/path/to/wasm-opt python3 scripts/bench.py
+QUICKJS_BIN=/path/to/qjs PRIMJS_BIN=/path/to/primjs IWASM_BIN=/path/to/iwasm IWASM_THREADS_BIN=/path/to/iwasm WASMTIME_BIN=/path/to/wasmtime WASMTIME_PULLEY_TAIL_BIN=/path/to/wasmtime-tail WASM_OPT_BIN=/path/to/wasm-opt python3 scripts/bench.py
 ```
 
 On macOS, Homebrew can provide the external optimizer/runtime tools:
@@ -140,19 +142,27 @@ The Wasmtime comparisons use the same optimized scalar `wasm32-wasip1` artifact 
 
 ```sh
 wasmtime run -C cache=n --target pulley64 artifacts/embedded-runtime-benchmarking.wasip1.opt.wasm
+tools/wasmtime-pulley-tail-nightly/bin/wasmtime run -C cache=n --target pulley64 artifacts/embedded-runtime-benchmarking.wasip1.opt.wasm
 wasmtime run -C cache=n -C compiler=cranelift artifacts/embedded-runtime-benchmarking.wasip1.opt.wasm
 ```
 
-`wasmtime-pulley` selects Wasmtime's portable interpreter by using the Pulley target. `wasmtime-jit` selects Cranelift explicitly. Both disable Wasmtime's persistent compilation cache with `-C cache=n` so results are not affected by a previous command-line cache entry.
+`wasmtime-pulley` selects Wasmtime's portable interpreter by using the Pulley target. `wasmtime-pulley-tail` uses a separately built Wasmtime 45.0.0 CLI with Pulley's nightly-only guaranteed tail-call loop enabled:
+
+```sh
+RUSTFLAGS="--cfg=pulley_tail_calls" CARGO_TARGET_DIR=target/wasmtime-pulley-tail-nightly cargo +nightly install wasmtime-cli --version 45.0.0 --root tools/wasmtime-pulley-tail-nightly --features pulley --locked --force
+```
+
+The stable-Rust `--cfg=pulley_assume_llvm_makes_tail_calls` Pulley path was also tested on this macOS arm64 host and crashed with `Bus error: 10`, so it is not included in the results. `wasmtime-jit` selects Cranelift explicitly. All Wasmtime runs disable Wasmtime's persistent compilation cache with `-C cache=n` so results are not affected by a previous command-line cache entry.
 
 The Wasmtime threaded comparisons use the optimized `wasm32-wasip1-threads` artifact:
 
 ```sh
 wasmtime run -C cache=n --target pulley64 -S threads=y -W threads=y -W shared-memory=y artifacts/embedded-runtime-benchmarking.wasip1-threads.opt.wasm --threads --workers 4
+tools/wasmtime-pulley-tail-nightly/bin/wasmtime run -C cache=n --target pulley64 -S threads=y -W threads=y -W shared-memory=y artifacts/embedded-runtime-benchmarking.wasip1-threads.opt.wasm --threads --workers 4
 wasmtime run -C cache=n -C compiler=cranelift -S threads=y -W threads=y -W shared-memory=y artifacts/embedded-runtime-benchmarking.wasip1-threads.opt.wasm --threads --workers 4
 ```
 
-Wasmtime 45.0.0 on this host reports `wasm_threads` as unsupported for the Pulley compiler configuration, so `wasmtime-pulley-threads` is included in the status table but has no timing samples. `wasmtime-jit-threads` runs successfully with WASI threads enabled.
+Wasmtime 45.0.0 on this host reports `wasm_threads` as unsupported for both Pulley compiler configurations, so `wasmtime-pulley-threads` and `wasmtime-pulley-tail-threads` are included in the status table but have no timing samples. `wasmtime-jit-threads` runs successfully with WASI threads enabled.
 
 ## Case Rewrite Policy
 
