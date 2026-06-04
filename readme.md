@@ -4,7 +4,7 @@ This repository benchmarks the V8 v7-style workload shape used by [ahaoboy/js-en
 
 ## Current Machine
 
-- Generated at: `2026-06-01T13:40:49+00:00`
+- Generated at: `2026-06-04T04:45:27+00:00`
 - Host: `Darwin arm64`
 - Rust: `rustc 1.95.0 (59807616e 2026-04-14)`
 - Cargo: `cargo 1.95.0 (f2d3ce0bd 2026-03-21)`
@@ -35,14 +35,14 @@ Median elapsed time in milliseconds. Lower is better.
 
 | Case | quickjs | primjs | wamr-fast-interp | wamr-fast-interp-threads | wasmtime-pulley | wasmtime-pulley-tail | wasmtime-jit | wasmtime-pulley-threads | wasmtime-pulley-tail-threads | wasmtime-jit-threads | Fastest | Fastest Interpreter |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Richards | 24.000 | 33.000 | 7.464 | 2.738 | 5.476 | 6.348 | 0.458 | - | - | 0.203 | wasmtime-jit-threads | wamr-fast-interp-threads |
-| DeltaBlue | 16.000 | 15.000 | 12.604 | 3.973 | 21.093 | 11.846 | 0.452 | - | - | 0.182 | wasmtime-jit-threads | wamr-fast-interp-threads |
-| Crypto | 521.000 | 800.000 | 17.496 | 5.794 | 31.893 | 23.284 | 3.253 | - | - | 0.937 | wasmtime-jit-threads | wamr-fast-interp-threads |
-| RayTrace | 34.000 | 40.000 | 16.345 | 3.983 | 20.689 | 10.363 | 0.527 | - | - | 0.206 | wasmtime-jit-threads | wamr-fast-interp-threads |
-| EarleyBoyer | 14.000 | 23.000 | 7.926 | 18.289 | 12.095 | 13.245 | 0.615 | - | - | 1.605 | wasmtime-jit | wamr-fast-interp |
-| RegExp | 82.000 | 105.000 | 71.765 | 18.845 | 79.573 | 79.343 | 3.419 | - | - | 1.471 | wasmtime-jit-threads | wamr-fast-interp-threads |
-| Splay | 657.000 | 1307.000 | 5.945 | 3.266 | 9.409 | 10.798 | 0.999 | - | - | 0.860 | wasmtime-jit-threads | wamr-fast-interp-threads |
-| NavierStokes | 37.000 | 42.000 | 14.435 | 3.189 | 30.063 | 17.995 | 0.981 | - | - | 0.432 | wasmtime-jit-threads | wamr-fast-interp-threads |
+| Richards | 23.000 | 32.000 | 7.412 | 1.514 | 6.839 | 7.736 | 0.453 | - | - | 0.195 | wasmtime-jit-threads | wamr-fast-interp-threads |
+| DeltaBlue | 16.000 | 15.000 | 12.603 | 2.812 | 20.119 | 12.652 | 0.447 | - | - | 0.185 | wasmtime-jit-threads | wamr-fast-interp-threads |
+| Crypto | 536.000 | 808.000 | 17.411 | 5.173 | 31.597 | 23.334 | 3.230 | - | - | 0.951 | wasmtime-jit-threads | wamr-fast-interp-threads |
+| RayTrace | 33.000 | 40.000 | 16.857 | 3.791 | 20.698 | 10.207 | 0.528 | - | - | 0.210 | wasmtime-jit-threads | wamr-fast-interp-threads |
+| EarleyBoyer | 14.000 | 23.000 | 8.290 | 18.412 | 11.948 | 13.935 | 0.617 | - | - | 1.116 | wasmtime-jit | wamr-fast-interp |
+| RegExp | 95.000 | 109.000 | 78.196 | 18.836 | 79.365 | 80.357 | 3.354 | - | - | 0.942 | wasmtime-jit-threads | wamr-fast-interp-threads |
+| Splay | 707.000 | 1321.000 | 6.502 | 3.286 | 9.274 | 12.004 | 0.968 | - | - | 0.522 | wasmtime-jit-threads | wamr-fast-interp-threads |
+| NavierStokes | 36.000 | 42.000 | 15.628 | 3.322 | 29.870 | 19.173 | 0.976 | - | - | 0.297 | wasmtime-jit-threads | wamr-fast-interp-threads |
 
 ## V8 V7 Style Score
 
@@ -54,16 +54,16 @@ Higher is better. This table follows the score shape from `ahaoboy/js-engine-ben
 | Total size | 46M | 46M | 540.9K | 522K | 66.3M | 46M | 950.4K | 2.4M | 46M | 66.3M |
 | Exe size | 46M | 46M | 540.9K | 522K | 66.3M | 46M | 950.4K | 2.4M | 46M | 66.3M |
 | Dll size | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| Richards | 17412 | 7716 | 1289 | 473 | 556 | 645 | 147 | 107 | - | - |
-| DeltaBlue | 36254 | 14620 | 1664 | 525 | 558 | 313 | 413 | 441 | - | - |
-| Crypto | 28405 | 8183 | 4594 | 1521 | 1143 | 835 | 51.1 | 33.3 | - | - |
-| RayTrace | 358783 | 140371 | 18579 | 4527 | 7141 | 3577 | 2176 | 1850 | - | - |
-| EarleyBoyer | 41528 | 108419 | 3644 | 8409 | 5032 | 5510 | 4760 | 2898 | - | - |
-| RegExp | 61919 | 26643 | 4834 | 1269 | 1148 | 1145 | 1111 | 868 | - | - |
-| Splay | 9478 | 8156 | 2495 | 1371 | 755 | 866 | 12.4 | 6.23 | - | - |
-| NavierStokes | 343784 | 151345 | 46535 | 10281 | 8247 | 4936 | 4011 | 3533 | - | - |
-| Score | 52054 | 28714 | 4974 | 2001 | 1758 | 1417 | 453 | 336 | - | - |
-| Score/MB | 1132 | 624 | 9417 | 3925 | 26 | 30 | 488 | 141 | - | - |
+| Richards | 18100 | 7788 | 2332 | 476 | 456 | 516 | 153 | 110 | - | - |
+| DeltaBlue | 35828 | 14801 | 2351 | 525 | 523 | 329 | 413 | 441 | - | - |
+| Crypto | 27991 | 8241 | 5146 | 1529 | 1141 | 842 | 49.7 | 32.9 | - | - |
+| RayTrace | 352515 | 140249 | 19520 | 4390 | 7249 | 3575 | 2242 | 1850 | - | - |
+| EarleyBoyer | 59706 | 108053 | 3620 | 8039 | 4783 | 5578 | 4760 | 2898 | - | - |
+| RegExp | 96750 | 27158 | 4836 | 1165 | 1134 | 1148 | 959 | 836 | - | - |
+| Splay | 15614 | 8417 | 2480 | 1253 | 679 | 879 | 11.5 | 6.17 | - | - |
+| NavierStokes | 500084 | 152004 | 44672 | 9496 | 7740 | 4968 | 4122 | 3533 | - | - |
+| Score | 64201 | 29000 | 5670 | 1923 | 1655 | 1394 | 445 | 334 | - | - |
+| Score/MB | 1396 | 630 | 10734 | 3771 | 24 | 30 | 479 | 141 | - | - |
 
 ## Notes
 
