@@ -27,10 +27,12 @@ WASM_THREADS_OPT = ARTIFACTS_DIR / "embedded-runtime-benchmarking.wasip1-threads
 WAMR_DARWIN_DIR = ROOT / "tools" / "wasm-micro-runtime" / "product-mini" / "platforms" / "darwin"
 WAMR_FULL_IWASM = WAMR_DARWIN_DIR / "build" / "iwasm"
 WAMR_THREADS_IWASM = WAMR_DARWIN_DIR / "build-threads-mem" / "iwasm"
+WASMI = ROOT / "tools" / "wasmi-cli" / "bin" / "wasmi"
 RUNTIMES = [
     "quickjs",
     "primjs",
     "wamr-fast-interp",
+    "wasmi",
     "wamr-fast-interp-threads",
     "wasmtime-pulley",
     "wasmtime-pulley-tail",
@@ -43,6 +45,7 @@ INTERPRETER_RUNTIMES = [
     "quickjs",
     "primjs",
     "wamr-fast-interp",
+    "wasmi",
     "wamr-fast-interp-threads",
     "wasmtime-pulley",
     "wasmtime-pulley-tail",
@@ -541,13 +544,14 @@ python3 scripts/bench.py --samples 5 --scale 1
 Runtime binaries can be overridden with environment variables:
 
 ```sh
-QUICKJS_BIN=/path/to/qjs PRIMJS_BIN=/path/to/primjs IWASM_BIN=/path/to/iwasm IWASM_THREADS_BIN=/path/to/iwasm WASMTIME_BIN=/path/to/wasmtime WASMTIME_PULLEY_TAIL_BIN=/path/to/wasmtime-tail WASM_OPT_BIN=/path/to/wasm-opt python3 scripts/bench.py
+QUICKJS_BIN=/path/to/qjs PRIMJS_BIN=/path/to/primjs IWASM_BIN=/path/to/iwasm IWASM_THREADS_BIN=/path/to/iwasm WASMI_BIN=/path/to/wasmi WASMTIME_BIN=/path/to/wasmtime WASMTIME_PULLEY_TAIL_BIN=/path/to/wasmtime-tail WASM_OPT_BIN=/path/to/wasm-opt python3 scripts/bench.py
 ```
 
 On macOS, Homebrew can provide the external optimizer/runtime tools:
 
 ```sh
 brew install binaryen wasm-micro-runtime python@3.11 wasmtime
+cargo install wasmi_cli --version 2.0.0-beta.2 --root tools/wasmi-cli --features simd --locked --force
 ```
 
 QuickJS and PrimJS are expected to be source-built for this comparison, then passed through `QUICKJS_BIN` and `PRIMJS_BIN`. The current default source builds follow ahaoboy's engine package scripts:
@@ -583,6 +587,7 @@ The scalar WAMR artifact is built with:
 RUSTFLAGS="{report["wasm"]["scalar_rustflags"]}" cargo build --release --target wasm32-wasip1
 wasm-opt -O3 {" ".join(report["wasm"]["wasm_opt_flags"])} target/wasm32-wasip1/release/embedded-runtime-benchmarking.wasm -o artifacts/embedded-runtime-benchmarking.wasip1.opt.wasm
 iwasm --interp artifacts/embedded-runtime-benchmarking.wasip1.opt.wasm
+wasmi --compilation-mode eager artifacts/embedded-runtime-benchmarking.wasip1.opt.wasm
 ```
 
 The threaded WAMR artifact is built from the same Rust package, with the copied threaded case set in `src/threaded_cases.rs`, and run with `--threads --workers {report["options"]["workers"]}`:
@@ -598,6 +603,8 @@ The Rust compile flags intentionally set `-C target-cpu=generic`, then enable th
 `iwasm --interp` selects interpreter execution. Use a WAMR build with `WAMR_BUILD_FAST_INTERP=1` enabled; WAMR documentation lists fast interpreter as the default build configuration and describes it as the optimized interpreter tier. `wasm32-wasip1-threads` additionally requires a WAMR build with `WAMR_BUILD_LIB_WASI_THREADS=1`.
 
 The scalar WAMR runtime is built from WAMR 2.4.4 with these stable WAMR runtime proposals enabled: `{", ".join(report["wasm"]["scalar_runtime_features"])}`. WAMR 2.4.4 reports these phase-4-or-newer proposals as unsupported and they are intentionally not emitted: `{", ".join(report["wasm"]["unsupported_wamr_features"])}`.
+
+The wasmi comparison uses `wasmi_cli 2.0.0-beta.2` installed with the default `wasi` feature and the additional `simd` feature. The benchmark runs with `--compilation-mode eager`, so wasmi translates the optimized module before entering `_start`; this keeps per-case timings focused on benchmark execution rather than first-touch translation.
 
 The threaded WAMR comparison uses a second WAMR 2.4.4 fast-interpreter binary with the maximum stable runtime feature set that passed `wasm32-wasip1-threads` validation on this machine: `{", ".join(report["wasm"]["threads_runtime_features"])}`. Enabling `WAMR_BUILD_GC=1`/typed function references together with wasi-threads made the WAMR fast-interpreter run hang or exit 139 on this host, so the threaded runtime keeps GC off to preserve functional correctness. The Rust threaded artifact still uses `wasm32-wasip1-threads`; atomics/shared-memory ABI comes from the Rust target, and the benchmark selects the copied threaded cases with `--cfg wasip1_threads`.
 
@@ -645,6 +652,7 @@ Wasmtime 45.0.0 on this host reports `wasm_threads` as unsupported for both Pull
 - [WAMR running modes](https://bytecodealliance.github.io/wamr.dev/blog/introduction-to-wamr-running-modes/)
 - [WAMR README](https://github.com/bytecodealliance/wasm-micro-runtime)
 - [WAMR WebAssembly proposal stability](https://github.com/bytecodealliance/wasm-micro-runtime/blob/main/doc/stability_wasm_proposals.md)
+- [wasmi](https://github.com/wasmi-labs/wasmi)
 - [Wasmtime Pulley documentation](https://docs.wasmtime.dev/examples-pulley.html)
 - [Wasmtime CLI options](https://docs.wasmtime.dev/cli-options.html)
 - [Rust wasm32-wasip1-threads target](https://doc.rust-lang.org/rustc/platform-support/wasm32-wasip1-threads.html)
@@ -686,6 +694,7 @@ def main() -> int:
         iwasm_threads_candidates.append(iwasm)
     iwasm_threads_candidates.append("iwasm")
     iwasm_threads = find_tool("IWASM_THREADS_BIN", iwasm_threads_candidates)
+    wasmi = find_tool("WASMI_BIN", [str(WASMI), "wasmi"])
     wasmtime = find_tool("WASMTIME_BIN", [str(ROOT / "tools" / "wasmtime" / "bin" / "wasmtime"), "wasmtime"])
     wasmtime_pulley_tail = find_tool(
         "WASMTIME_PULLEY_TAIL_BIN",
@@ -781,6 +790,38 @@ def main() -> int:
     else:
         tools.append(runtime_status("wamr-fast-interp", None, None, "missing; set IWASM_BIN or install iwasm"))
         notes.append("WAMR was not benchmarked because `iwasm` was not found in PATH.")
+
+    if wasmi and wasm_ready:
+        version = command_text([wasmi, "--version"])
+        wasmi_samples, error = run_json_benchmark(
+            "wasmi",
+            [
+                wasmi,
+                "--compilation-mode",
+                "eager",
+                str(WASM_OPT),
+                "--samples",
+                str(samples),
+                "--scale",
+                str(scale),
+            ],
+            args.timeout,
+        )
+        all_samples.extend(wasmi_samples)
+        tools.append(
+            runtime_status(
+                "wasmi",
+                wasmi,
+                version,
+                "ok" if not error else f"failed: {compact_error(error)}",
+            )
+        )
+    elif wasmi:
+        version = command_text([wasmi, "--version"])
+        tools.append(runtime_status("wasmi", wasmi, version, "skipped; optimized wasm artifact unavailable"))
+    else:
+        tools.append(runtime_status("wasmi", None, None, "missing; set WASMI_BIN or install wasmi_cli"))
+        notes.append("wasmi was not benchmarked because `wasmi` was not found in PATH.")
 
     if iwasm_threads and wasm_threads_ready:
         version = command_text([iwasm_threads, "--version"])
